@@ -67,6 +67,9 @@ def test_stats_events_and_organism(client: TestClient) -> None:
     assert body["id"] == "org_1"
     assert "genome" in body
     assert "program" in body["genome"]
+    assert "traits" in body["genome"]
+    assert "bravery" in body["genome"]["traits"]
+    assert "children" in body
 
 
 def test_create_world_replaces_previous(client: TestClient) -> None:

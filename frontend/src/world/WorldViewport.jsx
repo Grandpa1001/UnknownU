@@ -1,14 +1,26 @@
 import { useEffect, useRef } from "react";
-import { Application, Container } from "pixi.js";
+import { Application, Container, Graphics } from "pixi.js";
 import { attachCamera, focusOn } from "./camera.js";
 import { CANVAS_BG } from "./config.js";
-import { drawApples, makeFlowers, makeTerrainSprite, makeTrees, syncOrganisms } from "./layers.js";
+import {
+  drawApples,
+  hitOrganism,
+  makeFlowers,
+  makeTerrainSprite,
+  makeTrees,
+  organismRadius,
+  syncOrganisms,
+} from "./layers.js";
 
-export default function WorldViewport({ snapshot, live }) {
+export default function WorldViewport({ snapshot, live, selectedId, onSelect }) {
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
   const liveRef = useRef(live);
+  const selectedRef = useRef(selectedId);
+  const onSelectRef = useRef(onSelect);
   liveRef.current = live;
+  selectedRef.current = selectedId;
+  onSelectRef.current = onSelect;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -48,24 +60,36 @@ export default function WorldViewport({ snapshot, live }) {
       app.canvas.setAttribute("aria-label", "mapa świata");
 
       const world = new Container();
-      world.eventMode = "none";
+      world.eventMode = "passive";
       world.addChild(makeTerrainSprite(snapshot));
       world.addChild(makeFlowers(snapshot.flowers));
       world.addChild(makeTrees(snapshot.trees));
       const applesLayer = new Container();
       applesLayer.eventMode = "none";
       const organismsLayer = new Container();
-      organismsLayer.eventMode = "none";
+      organismsLayer.eventMode = "passive";
+      const ring = new Graphics();
+      ring.eventMode = "none";
       world.addChild(applesLayer);
       world.addChild(organismsLayer);
+      world.addChild(ring);
       app.stage.addChild(world);
 
       let follow = true;
       const applyLive = (state) => {
         const organisms = state?.organisms ?? snapshot.organisms;
         const apples = state?.apples ?? snapshot.apples;
-        syncOrganisms(organismsLayer, organismSprites, organisms);
+        syncOrganisms(organismsLayer, organismSprites, organisms, (organismId) => {
+          onSelectRef.current?.(organismId);
+        });
         drawApples(applesLayer, apples);
+        const selected = organisms.find((item) => item.id === selectedRef.current);
+        ring.clear();
+        if (selected) {
+          const radius = organismRadius(selected) + 6;
+          ring.circle(0, 0, radius).stroke({ width: 2, color: 0xf2f6ff });
+          ring.position.set(selected.position?.x ?? selected.x, selected.position?.y ?? selected.y);
+        }
         if (follow && organisms.length) {
           const target = organisms[0];
           focusOn(
@@ -81,8 +105,15 @@ export default function WorldViewport({ snapshot, live }) {
 
       world.scale.set(0.8);
       applyLive(liveRef.current ?? { organisms: snapshot.organisms, apples: snapshot.apples });
-      detachCamera = attachCamera(app, world, host, () => {
-        follow = false;
+      detachCamera = attachCamera(app, world, host, {
+        onInteract: () => {
+          follow = false;
+        },
+        hitTest: (worldX, worldY) => {
+          const organisms = liveRef.current?.organisms ?? snapshot.organisms;
+          return hitOrganism(organisms, worldX, worldY)?.id ?? null;
+        },
+        onSelect: (organismId) => onSelectRef.current?.(organismId),
       });
       sceneRef.current = { applyLive };
     }
@@ -104,7 +135,7 @@ export default function WorldViewport({ snapshot, live }) {
 
   useEffect(() => {
     sceneRef.current?.applyLive(live);
-  }, [live]);
+  }, [live, selectedId]);
 
   return (
     <div className="viewport">

@@ -218,6 +218,7 @@ class SimulationService:
         }
         payload["prediction_score"] = dict(organism.prediction_score)
         payload["thinking_quality"] = organism.thinking_quality
+        payload["children"] = [item.id for item in world.organisms if item.parent_id == organism_id]
         return payload
 
     def world_summary(self, world: World) -> dict:

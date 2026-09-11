@@ -143,7 +143,7 @@ a {
 
 .observatory-side {
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto auto 1fr;
   gap: 0.65rem;
   min-height: 0;
   padding: 0.75rem;
@@ -170,6 +170,63 @@ a {
 
 .stats dd {
   margin: 0;
+}
+
+.inspector {
+  border: 1px solid #404040;
+  padding: 0.55rem 0.6rem 0.7rem;
+  background: #1a1a1a;
+}
+
+.inspector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.inspector-close {
+  background: transparent;
+  border: 0;
+  color: #a0a0a0;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.inspector-dl {
+  margin: 0;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+}
+
+.inspector-dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.inspector-dl dt {
+  color: #a0a0a0;
+}
+
+.inspector-dl dd {
+  margin: 0;
+  text-align: right;
+}
+
+.inspector-program {
+  margin: 0.55rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.75rem;
+  color: #c8c8c8;
+}
+
+.inspector-error {
+  color: #e63946;
+  font-size: 0.82rem;
 }
 
 .event-log {

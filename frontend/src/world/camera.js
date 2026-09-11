@@ -1,26 +1,49 @@
-export function attachCamera(app, world, host, onInteract) {
+export function attachCamera(app, world, host, options = {}) {
+  const onInteract = typeof options === "function" ? options : options.onInteract;
+  const hitTest = typeof options === "function" ? null : options.hitTest;
+  const onSelect = typeof options === "function" ? null : options.onSelect;
+
   app.stage.eventMode = "static";
   app.stage.hitArea = app.screen;
 
   let dragging = false;
+  let moved = false;
   let lastX = 0;
   let lastY = 0;
+  let pendingSelect = null;
 
   const onDown = (event) => {
-    dragging = true;
     lastX = event.global.x;
     lastY = event.global.y;
-    onInteract?.();
+    moved = false;
+    const local = event.getLocalPosition(world);
+    pendingSelect = hitTest ? hitTest(local.x, local.y) : null;
+    dragging = !pendingSelect;
+    if (dragging) {
+      onInteract?.();
+    }
   };
   const onUp = () => {
+    if (pendingSelect) {
+      onSelect?.(pendingSelect);
+      onInteract?.();
+    } else if (!moved) {
+      onSelect?.(null);
+    }
     dragging = false;
+    pendingSelect = null;
   };
   const onMove = (event) => {
+    const dx = event.global.x - lastX;
+    const dy = event.global.y - lastY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) {
+      moved = true;
+    }
     if (!dragging) {
       return;
     }
-    world.x += event.global.x - lastX;
-    world.y += event.global.y - lastY;
+    world.x += dx;
+    world.y += dy;
     lastX = event.global.x;
     lastY = event.global.y;
   };

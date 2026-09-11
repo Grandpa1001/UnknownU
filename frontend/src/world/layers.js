@@ -73,20 +73,48 @@ export function drawApples(layer, apples) {
   }
 }
 
-export function syncOrganisms(layer, sprites, organisms) {
+export function organismRadius(organism) {
+  return Math.max(14, (organism.size || 8) * 1.8);
+}
+
+export function hitOrganism(organisms, worldX, worldY) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const organism of organisms) {
+    const x = organism.position?.x ?? organism.x;
+    const y = organism.position?.y ?? organism.y;
+    const radius = organismRadius(organism) + 4;
+    const dx = x - worldX;
+    const dy = y - worldY;
+    const dist = dx * dx + dy * dy;
+    if (dist <= radius * radius && dist < bestDist) {
+      best = organism;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+export function syncOrganisms(layer, sprites, organisms, onPick) {
   const seen = new Set();
   for (const organism of organisms) {
     seen.add(organism.id);
     let graphic = sprites.get(organism.id);
     if (!graphic) {
       graphic = new Graphics();
-      const radius = Math.max(14, (organism.size || 8) * 1.8);
+      const radius = organismRadius(organism);
       graphic.circle(0, 0, radius + 2).fill(0xf2f6ff);
       graphic.circle(0, 0, radius).fill(CREATURE);
-      graphic.eventMode = "none";
+      graphic.eventMode = "static";
+      graphic.cursor = "pointer";
+      graphic.on("pointerdown", (event) => {
+        event.stopPropagation();
+        onPick?.(graphic.organismId);
+      });
       layer.addChild(graphic);
       sprites.set(organism.id, graphic);
     }
+    graphic.organismId = organism.id;
     const x = organism.position?.x ?? organism.x;
     const y = organism.position?.y ?? organism.y;
     graphic.position.set(x, y);

@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import Inspector from "../world/Inspector.jsx";
 import WorldViewport from "../world/WorldViewport.jsx";
 import { useWorld } from "../world/useWorld.js";
 
@@ -46,6 +47,7 @@ function EventLog({ events }) {
 export default function WorldPage() {
   const { id } = useParams();
   const { snapshot, live, error, loading } = useWorld(id);
+  const [selectedId, setSelectedId] = useState(null);
   const stats = live?.stats;
   const events = live?.events ?? [];
 
@@ -66,10 +68,13 @@ export default function WorldPage() {
             </p>
           ) : null}
           {error === "error" ? <p className="viewport-msg">Backend nie odpowiada.</p> : null}
-          {snapshot ? <WorldViewport snapshot={snapshot} live={live} /> : null}
+          {snapshot ? (
+            <WorldViewport snapshot={snapshot} live={live} selectedId={selectedId} onSelect={setSelectedId} />
+          ) : null}
         </section>
         <aside className="observatory-side">
           <StatsPanel stats={stats} name={snapshot?.name} />
+          <Inspector organismId={selectedId} live={live} onClose={() => setSelectedId(null)} />
           <h2>dziennik</h2>
           <EventLog events={events} />
         </aside>
