@@ -10,6 +10,8 @@ from app.simulation.constants import (
     FOOD_TOUCH_RANGE,
     MOVE_COST,
     MOVE_STEP,
+    POPULATION_CAP,
+    REPRODUCE_COST,
     SENSE_COST,
     SENSE_RADIUS,
     TURN_COST,
@@ -17,6 +19,7 @@ from app.simulation.constants import (
     WAIT_COST,
 )
 from app.simulation.organism import Organism
+from app.simulation.genome import copy_genome, mutate_genome
 
 
 @dataclass(frozen=True)
@@ -183,6 +186,41 @@ def eat(organism: Organism, world: object) -> bool:
     return True
 
 
+def can_reproduce(organism: Organism) -> bool:
+    threshold = organism.genome.traits.reproduction_threshold * ENERGY_MAX
+    return organism.energy >= REPRODUCE_COST and organism.energy >= threshold
+
+
+def reproduce(organism: Organism, world: object) -> object | None:
+    if not can_reproduce(organism):
+        return None
+    if len(world.organisms) >= POPULATION_CAP:
+        world.record_event("POPULATION_CAP", organism.id, {"population": len(world.organisms)})
+        wait(organism)
+        return None
+    organism.energy -= REPRODUCE_COST
+    genome = copy_genome(organism.genome)
+    mutation_note = None
+    if world.rng.random() < world.mutation_rate:
+        genome, mutation_note = mutate_genome(genome, world.rng)
+        if mutation_note == "none":
+            mutation_note = None
+    child = world.spawn_child(organism, genome)
+    organism.last_action = "REPRODUCE"
+    world.record_event(
+        "BIRTH",
+        child.id,
+        {
+            "parent_id": organism.id,
+            "generation": child.generation,
+            "mutation": mutation_note,
+        },
+    )
+    if mutation_note:
+        world.record_event("MUTATION", child.id, {"description": mutation_note, "parent_id": organism.id})
+    return child
+
+
 def _energy_is_critical(organism: Organism) -> bool:
     return organism.energy <= CRITICAL_ENERGY
 
@@ -217,7 +255,8 @@ def execute_program(organism: Organism, world: object) -> None:
         elif instruction == "IF_ENERGY_LOW->WAIT" and _energy_is_critical(organism):
             wait(organism)
             acted = True
-        elif instruction == "IF_ENERGY_HIGH->REPRODUCE":
-            continue
+        elif instruction == "IF_ENERGY_HIGH->REPRODUCE" and can_reproduce(organism):
+            reproduce(organism, world)
+            acted = True
     if not acted:
         wander(organism, world)

@@ -7,10 +7,12 @@ from app.simulation.actions import execute_program, torus_distance, wrap
 from app.simulation.constants import (
     APPLE_RESPAWN_INTERVAL,
     APPLES_PER_TREE_MAX,
+    CHILD_ENERGY,
     DEFAULT_ORGANISM_COUNT,
     EXISTENCE_COST,
     FERTILITY_DURATION,
     FERTILITY_RADIUS,
+    MUTATION_CHANCE,
     ORGANISM_ENERGY_MAX,
     ORGANISM_ENERGY_MIN,
     WORLD_HEIGHT,
@@ -31,6 +33,7 @@ class World:
         height: int = WORLD_HEIGHT,
         initial_organisms: int = DEFAULT_ORGANISM_COUNT,
         spawn_apples: bool = True,
+        mutation_rate: float = MUTATION_CHANCE,
     ) -> None:
         if initial_organisms < 1:
             raise ValueError("initial_organisms must be >= 1")
@@ -47,6 +50,8 @@ class World:
         self.events: list[Event] = []
         self.fertility: list[Fertility] = []
         self._apple_seq = 0
+        self._org_seq = initial_organisms
+        self.mutation_rate = mutation_rate
         if not spawn_apples:
             for tree in self.trees:
                 tree.apples.clear()
@@ -124,6 +129,24 @@ class World:
         apple = spawn_apple_on_tree(self.rng, tree, f"apple_r{self.current_tick}_{self._apple_seq}")
         if apple:
             self.record_event("APPLE_RESPAWN", None, {"apple_id": apple.id, "tree_id": tree.id})
+
+    def spawn_child(self, parent: Organism, genome) -> Organism:
+        self._org_seq += 1
+        angle = self.rng.uniform(0.0, 2.0 * math.pi)
+        dist = self.rng.uniform(8.0, 18.0)
+        child = Organism(
+            id=f"org_{self._org_seq}",
+            x=wrap(parent.x + math.cos(angle) * dist, self.width),
+            y=wrap(parent.y + math.sin(angle) * dist, self.height),
+            direction=parent.direction,
+            energy=CHILD_ENERGY,
+            age=0,
+            generation=parent.generation + 1,
+            genome=genome,
+            parent_id=parent.id,
+        )
+        self.organisms.append(child)
+        return child
 
     def _expire_fertility(self) -> None:
         self.fertility = [zone for zone in self.fertility if zone.expires_at >= self.current_tick]

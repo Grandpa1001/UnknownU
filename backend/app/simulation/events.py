@@ -19,6 +19,13 @@ class Event:
         if self.type == "DEATH":
             age = self.data.get("age")
             return f"tick={self.tick} DEATH {self.organism_id} energy=0 age={age}"
+        if self.type == "BIRTH":
+            return (
+                f"tick={self.tick} BIRTH child={self.organism_id} "
+                f"parent={self.data.get('parent_id')} generation={self.data.get('generation')}"
+            )
+        if self.type == "MUTATION":
+            return f"tick={self.tick} MUTATION {self.organism_id} {self.data.get('description')}"
         if self.type == "APPLE_RESPAWN":
             return f"tick={self.tick} APPLE_RESPAWN {self.data.get('apple_id')} tree={self.data.get('tree_id')}"
         extra = f" {self.data}" if self.data else ""
