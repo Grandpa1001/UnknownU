@@ -16,6 +16,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--print-every", type=int, default=0)
     parser.add_argument("--print-events", action="store_true")
     parser.add_argument("--no-apples", action="store_true")
+    parser.add_argument("--print-memory", default=None, metavar="ORG_ID")
     return parser.parse_args(argv)
 
 
@@ -38,6 +39,18 @@ def dump_world(world: World) -> str:
     return "\n".join(lines)
 
 
+def dump_memory(world: World, organism_id: str) -> str:
+    organism = next((item for item in world.organisms if item.id == organism_id), None)
+    if organism is None:
+        return f"{organism_id} not alive"
+    scores = organism.prediction_score or {}
+    parts = ", ".join(f"{action}={score:.2f}" for action, score in sorted(scores.items())) or "(empty)"
+    return (
+        f"{organism.id} thinking={organism.is_thinking} quality={organism.thinking_quality:.2f} "
+        f"last_delta={organism.last_energy_delta:.1f} scores={{ {parts} }}"
+    )
+
+
 def run(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     world = World(
@@ -58,10 +71,17 @@ def run(argv: list[str] | None = None) -> int:
         if args.print_every and world.current_tick % args.print_every == 0:
             print(dump_world(world))
             print("---")
+        if args.print_memory and world.current_tick % 50 == 0:
+            print(dump_memory(world, args.print_memory))
         if world.status != "running":
             break
     if args.do_print:
         print(dump_world(world))
+    if args.print_memory:
+        print(dump_memory(world, args.print_memory))
+        if world.status == "extinct":
+            # last known scores die with the organism; show events still ran
+            print(f"(world {world.status}; memory exists only on living organisms)")
     return 0
 
 

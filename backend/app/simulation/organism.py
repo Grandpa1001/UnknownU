@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.simulation.genome import Genome
 
@@ -18,6 +18,11 @@ class Organism:
     parent_id: str | None = None
     last_action: str | None = None
     last_perception: object | None = None
+    last_energy_delta: float = 0.0
+    prediction_score: dict[str, float] = field(default_factory=dict)
+    is_thinking: bool = False
+    thinking_ticks_left: int = 0
+    thinking_quality: float = 0.0
 
     @property
     def size(self) -> int:

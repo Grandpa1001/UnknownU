@@ -20,6 +20,7 @@ from app.simulation.constants import (
 )
 from app.simulation.organism import Organism
 from app.simulation.genome import copy_genome, mutate_genome
+from app.simulation.learning import apply_learning, maybe_start_think, should_skip, start_think, think_step
 
 
 @dataclass(frozen=True)
@@ -237,26 +238,57 @@ def wander(organism: Organism, world: object) -> None:
 
 
 def execute_program(organism: Organism, world: object) -> None:
+    if organism.thinking_ticks_left > 0:
+        before = organism.energy
+        think_step(organism)
+        apply_learning(organism, organism.energy - before)
+        return
+
     perception: Perception | None = None
     acted = False
+    body_energy_start = organism.energy
+    rng = world.rng
+
     for instruction in organism.genome.program:
         if instruction == "SENSE":
             perception = sense(organism, world)
+            body_energy_start = organism.energy
+            if maybe_start_think(organism, world, perception):
+                think_step(organism)
+                apply_learning(organism, organism.energy - body_energy_start)
+                return
             continue
         if acted:
             continue
         if instruction == "IF_FOOD_TOUCH->EAT" and _food_touching(perception):
             eat(organism, world)
             acted = True
-        elif instruction == "IF_FOOD_NEARBY->MOVE" and perception and perception.food:
+        elif (
+            instruction == "IF_ENERGY_HIGH->REPRODUCE"
+            and can_reproduce(organism)
+            and not should_skip(organism, "REPRODUCE", rng)
+        ):
+            reproduce(organism, world)
+            acted = True
+        elif (
+            instruction == "IF_FOOD_NEARBY->MOVE"
+            and perception
+            and perception.food
+            and not should_skip(organism, "MOVE", rng)
+        ):
             turn_towards(organism, perception.food[0].direction)
             move(organism, world)
             acted = True
         elif instruction == "IF_ENERGY_LOW->WAIT" and _energy_is_critical(organism):
             wait(organism)
             acted = True
-        elif instruction == "IF_ENERGY_HIGH->REPRODUCE" and can_reproduce(organism):
-            reproduce(organism, world)
+        elif instruction == "THINK":
+            start_think(organism)
+            think_step(organism)
             acted = True
     if not acted:
-        wander(organism, world)
+        if should_skip(organism, "MOVE", rng):
+            wait(organism)
+        else:
+            wander(organism, world)
+    apply_learning(organism, organism.energy - body_energy_start)

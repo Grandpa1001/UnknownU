@@ -1,4 +1,4 @@
-.PHONY: install test backend frontend dev sim sim-move sim-life sim-extinct sim-evo
+.PHONY: install test backend frontend dev sim sim-move sim-life sim-extinct sim-evo sim-learn
 
 BACKEND := backend
 FRONTEND := frontend
@@ -41,3 +41,6 @@ sim-extinct:
 
 sim-evo:
 	cd $(BACKEND) && .venv/bin/python -m app.simulation.runner --ticks 8000 --seed 42 --organisms 5 --print-events
+
+sim-learn:
+	cd $(BACKEND) && .venv/bin/python -m app.simulation.runner --ticks 3000 --seed 7 --print-events --print-memory org_1
