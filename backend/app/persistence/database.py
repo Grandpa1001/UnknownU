@@ -56,6 +56,14 @@ CREATE TABLE IF NOT EXISTS snapshots (
 """
 
 
+def reset_database(connection: sqlite3.Connection) -> None:
+    connection.execute("DELETE FROM organisms")
+    connection.execute("DELETE FROM events")
+    connection.execute("DELETE FROM snapshots")
+    connection.execute("DELETE FROM worlds")
+    connection.commit()
+
+
 def connect(path: str | Path) -> sqlite3.Connection:
     db_path = Path(path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
