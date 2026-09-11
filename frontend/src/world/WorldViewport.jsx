@@ -3,14 +3,15 @@ import { Application, Container, Graphics } from "pixi.js";
 import { attachCamera, focusOn, lerpToward } from "./camera.js";
 import { CANVAS_BG } from "./config.js";
 import {
-  drawApples,
+  drawSelectRing,
   drawTags,
   hitOrganism,
   makeFlowers,
   makeTerrainSprite,
   makeTrees,
-  organismRadius,
+  syncApples,
   syncOrganisms,
+  tickOrganisms,
 } from "./layers.js";
 
 export default function WorldViewport({ snapshot, live, selectedId, taggedIds, followId, onSelect, onFollowLost }) {
@@ -41,6 +42,7 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
     let app;
     let detachCamera = () => {};
     const organismSprites = new Map();
+    const appleSprites = new Map();
 
     async function boot() {
       const instance = new Application();
@@ -49,6 +51,7 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
           resizeTo: host,
           background: CANVAS_BG,
           antialias: false,
+          roundPixels: true,
           autoDensity: true,
           resolution: window.devicePixelRatio || 1,
         });
@@ -65,6 +68,7 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
       app.canvas.style.display = "block";
       app.canvas.style.width = "100%";
       app.canvas.style.height = "100%";
+      app.canvas.style.imageRendering = "pixelated";
       app.canvas.style.cursor = "grab";
       app.canvas.setAttribute("role", "application");
       app.canvas.setAttribute("aria-label", "mapa świata");
@@ -89,21 +93,17 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
       app.stage.addChild(world);
 
       const applyLive = (state) => {
+        const now = performance.now();
         const organisms = state?.organisms ?? snapshot.organisms;
         const apples = state?.apples ?? snapshot.apples;
-        syncOrganisms(organismsLayer, organismSprites, organisms);
-        drawApples(applesLayer, apples);
+        syncOrganisms(organismsLayer, organismSprites, organisms, now);
+        syncApples(applesLayer, appleSprites, apples);
         drawTags(tagsLayer, organisms, taggedRef.current);
         const selected = organisms.find((item) => item.id === selectedRef.current);
-        ring.clear();
-        if (selected) {
-          const radius = organismRadius(selected) + 6;
-          ring.circle(0, 0, radius).stroke({ width: 2, color: 0xf2f6ff });
-          ring.position.set(selected.position?.x ?? selected.x, selected.position?.y ?? selected.y);
-        }
+        drawSelectRing(ring, selected);
       };
 
-      world.scale.set(0.8);
+      world.scale.set(1.8);
       const start = snapshot.organisms[0];
       if (start) {
         focusOn(
@@ -112,7 +112,7 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
           app.renderer.height,
           start.position?.x ?? start.x,
           start.position?.y ?? start.y,
-          0.8,
+          1.8,
         );
       } else {
         focusOn(world, app.renderer.width, app.renderer.height, snapshot.width / 2, snapshot.height / 2, 0.35);
@@ -130,6 +130,7 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
         onSelect: (organismId) => onSelectRef.current?.(organismId),
       });
       app.ticker.add(() => {
+        tickOrganisms(organismSprites, performance.now());
         const id = followRef.current;
         if (!id) {
           return;

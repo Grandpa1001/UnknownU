@@ -343,6 +343,11 @@ a {
   height: 100%;
 }
 
+.viewport-canvas canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
 .viewport {
   position: relative;
   overflow: hidden;

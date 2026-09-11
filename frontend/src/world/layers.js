@@ -1,80 +1,24 @@
-import { Container, Graphics, Sprite } from "pixi.js";
+import { Container, Graphics } from "pixi.js";
 import {
-  APPLE,
-  CREATURE,
-  FLOWER_COLORS,
-  FOLIAGE,
-  TERRAIN_COLORS,
-  TRUNK,
+  CREATURE_H,
+  DEATH_FADE_MS,
+  SELECT_RING,
+  SPINNER_FRAME_MS,
+  TAG_GOLD,
+  WALK_FRAME_MS,
 } from "./config.js";
+import {
+  creatureTexture,
+  facingFromDirection,
+  getAtlas,
+  makeTerrainSprite,
+  pixelSprite,
+} from "./sprites.js";
 
-export function makeTerrainSprite(snapshot) {
-  const tiles = snapshot.terrain;
-  const tileSize = snapshot.tile_size || 16;
-  const rows = tiles.length;
-  const cols = tiles[0].length;
-  const canvas = document.createElement("canvas");
-  canvas.width = cols;
-  canvas.height = rows;
-  const ctx = canvas.getContext("2d");
-  const image = ctx.createImageData(cols, rows);
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < cols; x += 1) {
-      const color = TERRAIN_COLORS[tiles[y][x]] || TERRAIN_COLORS.grass;
-      const index = (y * cols + x) * 4;
-      image.data[index] = color[0];
-      image.data[index + 1] = color[1];
-      image.data[index + 2] = color[2];
-      image.data[index + 3] = color[3];
-    }
-  }
-  ctx.putImageData(image, 0, 0);
-  const sprite = Sprite.from(canvas);
-  sprite.scale.set(tileSize);
-  sprite.eventMode = "none";
-  return sprite;
-}
-
-export function makeFlowers(flowers) {
-  const layer = new Container();
-  layer.eventMode = "none";
-  for (const flower of flowers) {
-    const graphic = new Graphics();
-    graphic.circle(0, 0, 3).fill(FLOWER_COLORS[flower.variant % FLOWER_COLORS.length]);
-    graphic.position.set(flower.x, flower.y);
-    graphic.eventMode = "none";
-    layer.addChild(graphic);
-  }
-  return layer;
-}
-
-export function makeTrees(trees) {
-  const layer = new Container();
-  layer.eventMode = "none";
-  for (const tree of trees) {
-    const graphic = new Graphics();
-    graphic.circle(0, 0, 18).fill(FOLIAGE);
-    graphic.circle(0, 5, 6).fill(TRUNK);
-    graphic.position.set(tree.x, tree.y);
-    graphic.eventMode = "none";
-    layer.addChild(graphic);
-  }
-  return layer;
-}
-
-export function drawApples(layer, apples) {
-  layer.removeChildren();
-  for (const apple of apples) {
-    const graphic = new Graphics();
-    graphic.circle(0, 0, 4).fill(APPLE);
-    graphic.position.set(apple.x, apple.y);
-    graphic.eventMode = "none";
-    layer.addChild(graphic);
-  }
-}
+export { makeTerrainSprite };
 
 export function organismRadius(organism) {
-  return Math.max(14, (organism.size || 8) * 1.8);
+  return Math.max(13, (organism.size || 8) * 1.6);
 }
 
 export function hitOrganism(organisms, worldX, worldY, scale = 1) {
@@ -84,7 +28,7 @@ export function hitOrganism(organisms, worldX, worldY, scale = 1) {
   for (const organism of organisms) {
     const x = organism.position?.x ?? organism.x;
     const y = organism.position?.y ?? organism.y;
-    const radius = Math.max(organismRadius(organism) + 4, minRadius);
+    const radius = Math.max(organismRadius(organism) + 8, minRadius);
     const dx = x - worldX;
     const dy = y - worldY;
     const dist = dx * dx + dy * dy;
@@ -96,8 +40,137 @@ export function hitOrganism(organisms, worldX, worldY, scale = 1) {
   return best;
 }
 
+export function makeFlowers(flowers) {
+  const layer = new Container();
+  layer.eventMode = "none";
+  const atlas = getAtlas();
+  for (const flower of flowers) {
+    const sprite = pixelSprite(atlas.flowers[flower.variant % atlas.flowers.length]);
+    sprite.position.set(flower.x, flower.y);
+    layer.addChild(sprite);
+  }
+  return layer;
+}
+
+export function makeTrees(trees) {
+  const layer = new Container();
+  layer.eventMode = "none";
+  const atlas = getAtlas();
+  for (const tree of trees) {
+    const sprite = pixelSprite(atlas.tree, 0.5, 0.72);
+    sprite.position.set(tree.x, tree.y);
+    layer.addChild(sprite);
+  }
+  return layer;
+}
+
+export function syncApples(layer, sprites, apples) {
+  const seen = new Set();
+  const atlas = getAtlas();
+  for (const apple of apples) {
+    seen.add(apple.id);
+    let sprite = sprites.get(apple.id);
+    if (!sprite) {
+      sprite = pixelSprite(atlas.apple);
+      layer.addChild(sprite);
+      sprites.set(apple.id, sprite);
+    }
+    sprite.position.set(apple.x, apple.y);
+  }
+  for (const [id, sprite] of sprites) {
+    if (!seen.has(id)) {
+      sprite.destroy();
+      sprites.delete(id);
+    }
+  }
+}
+
+function createOrganismVisual(organism) {
+  const atlas = getAtlas();
+  const body = pixelSprite(creatureTexture(organism.feature || "none", "down", 0), 0.5, 0.72);
+  const spinner = pixelSprite(atlas.spinner[0]);
+  spinner.position.set(0, -Math.round(CREATURE_H * 0.55));
+  spinner.visible = false;
+  const container = new Container();
+  container.eventMode = "none";
+  container.addChild(body);
+  container.addChild(spinner);
+  return {
+    container,
+    body,
+    spinner,
+    organism,
+    dying: false,
+    diedAt: 0,
+  };
+}
+
+function pose(organism, now) {
+  const facing = facingFromDirection(organism.direction ?? 0);
+  const walking = organism.last_action === "MOVE";
+  const frame = walking ? Math.floor(now / WALK_FRAME_MS) % 2 : 0;
+  return { facing, frame };
+}
+
+function applyOrganismPose(visual, organism, now) {
+  const { facing, frame } = pose(organism, now);
+  visual.body.texture = creatureTexture(organism.feature || "none", facing, frame);
+  visual.body.scale.x = facing === "left" ? -1 : 1;
+  const size = organism.size || 8;
+  const scale = 1.15 + size / 40;
+  visual.container.scale.set(scale);
+  visual.spinner.visible = Boolean(organism.is_thinking);
+  if (visual.spinner.visible) {
+    const spin = Math.floor(now / SPINNER_FRAME_MS) % 8;
+    visual.spinner.texture = getAtlas().spinner[spin];
+  }
+}
+
+export function syncOrganisms(layer, sprites, organisms, now) {
+  const seen = new Set();
+  for (const organism of organisms) {
+    seen.add(organism.id);
+    let visual = sprites.get(organism.id);
+    if (!visual) {
+      visual = createOrganismVisual(organism);
+      layer.addChild(visual.container);
+      sprites.set(organism.id, visual);
+    }
+    visual.organism = organism;
+    visual.dying = false;
+    visual.container.alpha = 1;
+    visual.container.position.set(organism.position?.x ?? organism.x, organism.position?.y ?? organism.y);
+    applyOrganismPose(visual, organism, now);
+  }
+  for (const [id, visual] of sprites) {
+    if (!seen.has(id) && !visual.dying) {
+      visual.dying = true;
+      visual.diedAt = now;
+      visual.spinner.visible = false;
+    }
+  }
+}
+
+export function tickOrganisms(sprites, now) {
+  for (const [id, visual] of sprites) {
+    if (visual.dying) {
+      const t = (now - visual.diedAt) / DEATH_FADE_MS;
+      if (t >= 1) {
+        visual.container.destroy({ children: true });
+        sprites.delete(id);
+      } else {
+        visual.container.alpha = Math.max(0, 1 - t);
+      }
+      continue;
+    }
+    applyOrganismPose(visual, visual.organism, now);
+  }
+}
+
 export function drawTags(layer, organisms, taggedIds) {
-  layer.removeChildren();
+  for (const child of layer.removeChildren()) {
+    child.destroy();
+  }
   const tagged = new Set(taggedIds);
   for (const organism of organisms) {
     if (!tagged.has(organism.id)) {
@@ -105,39 +178,26 @@ export function drawTags(layer, organisms, taggedIds) {
     }
     const radius = organismRadius(organism);
     const mark = new Graphics();
-    mark.poly([0, 0, -5, 10, 5, 10]).fill(0xffd700);
+    mark.rect(-1, 0, 2, 8).fill(TAG_GOLD);
+    mark.poly([0, 0, -4, 7, 4, 7]).fill(TAG_GOLD);
     mark.position.set(
       organism.position?.x ?? organism.x,
-      (organism.position?.y ?? organism.y) - radius - 12,
+      (organism.position?.y ?? organism.y) - radius - 14,
     );
     mark.eventMode = "none";
     layer.addChild(mark);
   }
 }
 
-export function syncOrganisms(layer, sprites, organisms) {
-  const seen = new Set();
-  for (const organism of organisms) {
-    seen.add(organism.id);
-    let graphic = sprites.get(organism.id);
-    if (!graphic) {
-      graphic = new Graphics();
-      const radius = organismRadius(organism);
-      graphic.circle(0, 0, radius + 2).fill(0xf2f6ff);
-      graphic.circle(0, 0, radius).fill(CREATURE);
-      graphic.eventMode = "none";
-      layer.addChild(graphic);
-      sprites.set(organism.id, graphic);
-    }
-    graphic.organismId = organism.id;
-    const x = organism.position?.x ?? organism.x;
-    const y = organism.position?.y ?? organism.y;
-    graphic.position.set(x, y);
+export function drawSelectRing(ring, organism) {
+  ring.clear();
+  if (!organism) {
+    return;
   }
-  for (const [id, graphic] of sprites) {
-    if (!seen.has(id)) {
-      graphic.destroy();
-      sprites.delete(id);
-    }
-  }
+  const radius = organismRadius(organism) + 6;
+  ring.rect(-radius, -radius, radius * 2, 2).fill(SELECT_RING);
+  ring.rect(-radius, radius - 2, radius * 2, 2).fill(SELECT_RING);
+  ring.rect(-radius, -radius, 2, radius * 2).fill(SELECT_RING);
+  ring.rect(radius - 2, -radius, 2, radius * 2).fill(SELECT_RING);
+  ring.position.set(organism.position?.x ?? organism.x, organism.position?.y ?? organism.y);
 }
