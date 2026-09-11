@@ -23,6 +23,7 @@ class Organism:
     is_thinking: bool = False
     thinking_ticks_left: int = 0
     thinking_quality: float = 0.0
+    born_at_tick: int = 0
 
     @property
     def size(self) -> int:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 
+from app.persistence.database import connect, load_world, save_world
+from app.simulation.constants import SNAPSHOT_INTERVAL
 from app.simulation.world import World
 
 
@@ -17,6 +19,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--print-events", action="store_true")
     parser.add_argument("--no-apples", action="store_true")
     parser.add_argument("--print-memory", default=None, metavar="ORG_ID")
+    parser.add_argument("--db", default=None)
+    parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--max-tick", type=int, default=None)
+    parser.add_argument("--name", default="world")
     return parser.parse_args(argv)
 
 
@@ -53,13 +59,21 @@ def dump_memory(world: World, organism_id: str) -> str:
 
 def run(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    world = World(
-        seed=args.seed,
-        width=args.width,
-        height=args.height,
-        initial_organisms=args.organisms,
-        spawn_apples=not args.no_apples,
-    )
+    connection = connect(args.db) if args.db else None
+    if args.resume:
+        if connection is None:
+            raise SystemExit("--resume requires --db")
+        world = load_world(connection)
+    else:
+        world = World(
+            seed=args.seed,
+            width=args.width,
+            height=args.height,
+            initial_organisms=args.organisms,
+            spawn_apples=not args.no_apples,
+        )
+        world.name = args.name
+        world.max_tick = args.max_tick
     emit_events = args.print_events or args.print_every or args.do_print
     cursor = 0
     for _ in range(args.ticks):
@@ -73,6 +87,8 @@ def run(argv: list[str] | None = None) -> int:
             print("---")
         if args.print_memory and world.current_tick % 50 == 0:
             print(dump_memory(world, args.print_memory))
+        if connection is not None and world.current_tick % SNAPSHOT_INTERVAL == 0:
+            save_world(connection, world)
         if world.status != "running":
             break
     if args.do_print:
@@ -80,8 +96,10 @@ def run(argv: list[str] | None = None) -> int:
     if args.print_memory:
         print(dump_memory(world, args.print_memory))
         if world.status == "extinct":
-            # last known scores die with the organism; show events still ran
             print(f"(world {world.status}; memory exists only on living organisms)")
+    if connection is not None:
+        save_world(connection, world)
+        connection.close()
     return 0
 
 

@@ -52,6 +52,11 @@ class World:
         self._apple_seq = 0
         self._org_seq = initial_organisms
         self.mutation_rate = mutation_rate
+        self.name = "world"
+        self.max_tick: int | None = None
+        self.initial_organism_count = initial_organisms
+        self.dead: list[dict] = []
+        self.db_id: int | None = None
         if not spawn_apples:
             for tree in self.trees:
                 tree.apples.clear()
@@ -83,6 +88,8 @@ class World:
         self._resolve_deaths()
         self._respawn_apples()
         self._expire_fertility()
+        if self.max_tick is not None and self.current_tick >= self.max_tick and self.status == "running":
+            self.status = "finished"
 
     def _resolve_deaths(self) -> None:
         still_alive: list[Organism] = []
@@ -90,6 +97,22 @@ class World:
             if organism.energy > 0:
                 still_alive.append(organism)
                 continue
+            self.dead.append(
+                {
+                    "id": organism.id,
+                    "parent_id": organism.parent_id,
+                    "born_at_tick": organism.born_at_tick,
+                    "died_at_tick": self.current_tick,
+                    "generation": organism.generation,
+                    "genome": {
+                        "traits": organism.genome.traits.__dict__,
+                        "program": list(organism.genome.program),
+                        "morphology": organism.genome.morphology.__dict__,
+                    },
+                    "final_energy": organism.energy,
+                    "final_age": organism.age,
+                }
+            )
             self.fertility.append(
                 Fertility(x=organism.x, y=organism.y, expires_at=self.current_tick + FERTILITY_DURATION)
             )
@@ -144,6 +167,7 @@ class World:
             generation=parent.generation + 1,
             genome=genome,
             parent_id=parent.id,
+            born_at_tick=self.current_tick,
         )
         self.organisms.append(child)
         return child
@@ -175,6 +199,7 @@ class World:
                     age=0,
                     generation=1,
                     genome=genome,
+                    born_at_tick=0,
                 )
             )
         return organisms
