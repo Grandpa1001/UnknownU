@@ -8,6 +8,7 @@ export default function Home() {
   const [count, setCount] = useState(3);
   const [autoSeed, setAutoSeed] = useState(true);
   const [seed, setSeed] = useState("1");
+  const [maxTick, setMaxTick] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -22,6 +23,9 @@ export default function Home() {
       };
       if (!autoSeed) {
         body.seed = Number(seed);
+      }
+      if (maxTick !== "" && Number(maxTick) >= 1) {
+        body.max_tick = Number(maxTick);
       }
       const response = await fetch(`${API_BASE}/api/worlds`, {
         method: "POST",
@@ -82,6 +86,16 @@ export default function Home() {
             />
           </label>
         )}
+        <label>
+          limit ticków
+          <input
+            type="number"
+            min="1"
+            placeholder="puste = aż do wymarcia"
+            value={maxTick}
+            onChange={(event) => setMaxTick(event.target.value)}
+          />
+        </label>
         {error ? <p className="start-error">{error}</p> : null}
         <button type="submit" disabled={busy}>
           {busy ? "tworzę…" : "START"}

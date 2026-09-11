@@ -8,9 +8,18 @@ function fmt(value) {
   return value ?? "—";
 }
 
-export default function Inspector({ organismId, live, onClose }) {
+export default function Inspector({
+  organismId,
+  live,
+  tagged,
+  following,
+  onClose,
+  onToggleTag,
+  onFollow,
+}) {
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
+  const living = Boolean(live?.organisms?.some((item) => item.id === organismId));
 
   useEffect(() => {
     if (!organismId) {
@@ -44,7 +53,7 @@ export default function Inspector({ organismId, live, onClose }) {
     return () => {
       cancelled = true;
     };
-  }, [organismId]);
+  }, [organismId, living]);
 
   if (!organismId) {
     return null;
@@ -55,6 +64,7 @@ export default function Inspector({ organismId, live, onClose }) {
   const traits = file?.genome?.traits ?? {};
   const program = file?.genome?.program ?? [];
   const children = file?.children ?? [];
+  const alive = Boolean(liveBody) || file?.alive === true;
 
   return (
     <section className="inspector" aria-label="kartoteka organizmu">
@@ -64,11 +74,23 @@ export default function Inspector({ organismId, live, onClose }) {
           ×
         </button>
       </header>
+      <div className="inspector-actions">
+        <button type="button" aria-pressed={tagged} onClick={onToggleTag}>
+          {tagged ? "odtaguj" : "taguj"}
+        </button>
+        <button type="button" aria-pressed={following} onClick={onFollow} disabled={!liveBody}>
+          {following ? "nie śledź" : "śledź"}
+        </button>
+      </div>
       {error ? <p className="inspector-error">{error}</p> : null}
       {!file && !error ? <p>wczytuję…</p> : null}
       {file ? (
         <dl className="inspector-dl">
           <div><dt>id</dt><dd>{body.id}</dd></div>
+          <div><dt>stan</dt><dd>{alive ? "żyje" : "martwy"}</dd></div>
+          {alive ? null : (
+            <div><dt>zgon</dt><dd>tick {fmt(file.died_at_tick)}</dd></div>
+          )}
           <div><dt>cecha</dt><dd>{body.feature ?? file.feature}</dd></div>
           <div><dt>energia</dt><dd>{fmt(body.energy)}</dd></div>
           <div><dt>wiek</dt><dd>{fmt(body.age)}</dd></div>

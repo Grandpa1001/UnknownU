@@ -3,39 +3,51 @@ export function attachCamera(app, world, host, options = {}) {
   const hitTest = typeof options === "function" ? null : options.hitTest;
   const onSelect = typeof options === "function" ? null : options.onSelect;
 
-  app.stage.eventMode = "static";
-  app.stage.hitArea = app.screen;
-
   let dragging = false;
   let moved = false;
   let lastX = 0;
   let lastY = 0;
   let pendingSelect = null;
 
+  const worldPos = (clientX, clientY) => {
+    const bounds = app.canvas.getBoundingClientRect();
+    const px = clientX - bounds.left;
+    const py = clientY - bounds.top;
+    const scale = world.scale.x;
+    return {
+      x: (px - world.x) / scale,
+      y: (py - world.y) / scale,
+    };
+  };
+
   const onDown = (event) => {
-    lastX = event.global.x;
-    lastY = event.global.y;
+    if (event.button !== 0) {
+      return;
+    }
+    lastX = event.clientX;
+    lastY = event.clientY;
     moved = false;
-    const local = event.getLocalPosition(world);
+    const local = worldPos(event.clientX, event.clientY);
     pendingSelect = hitTest ? hitTest(local.x, local.y) : null;
     dragging = !pendingSelect;
     if (dragging) {
       onInteract?.();
+      host.style.cursor = "grabbing";
     }
   };
   const onUp = () => {
     if (pendingSelect) {
       onSelect?.(pendingSelect);
-      onInteract?.();
     } else if (!moved) {
       onSelect?.(null);
     }
     dragging = false;
     pendingSelect = null;
+    host.style.cursor = "grab";
   };
   const onMove = (event) => {
-    const dx = event.global.x - lastX;
-    const dy = event.global.y - lastY;
+    const dx = event.clientX - lastX;
+    const dy = event.clientY - lastY;
     if (Math.abs(dx) + Math.abs(dy) > 3) {
       moved = true;
     }
@@ -44,14 +56,13 @@ export function attachCamera(app, world, host, options = {}) {
     }
     world.x += dx;
     world.y += dy;
-    lastX = event.global.x;
-    lastY = event.global.y;
+    lastX = event.clientX;
+    lastY = event.clientY;
   };
 
-  app.stage.on("pointerdown", onDown);
-  app.stage.on("pointerup", onUp);
-  app.stage.on("pointerupoutside", onUp);
-  app.stage.on("pointermove", onMove);
+  host.addEventListener("pointerdown", onDown);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointermove", onMove);
 
   const onWheel = (event) => {
     event.preventDefault();
@@ -65,14 +76,14 @@ export function attachCamera(app, world, host, options = {}) {
     world.scale.set(next);
     world.x = px - worldX * next;
     world.y = py - worldY * next;
+    onInteract?.();
   };
   host.addEventListener("wheel", onWheel, { passive: false });
 
   return () => {
-    app.stage.off("pointerdown", onDown);
-    app.stage.off("pointerup", onUp);
-    app.stage.off("pointerupoutside", onUp);
-    app.stage.off("pointermove", onMove);
+    host.removeEventListener("pointerdown", onDown);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointermove", onMove);
     host.removeEventListener("wheel", onWheel);
   };
 }
@@ -81,4 +92,12 @@ export function focusOn(world, viewWidth, viewHeight, x, y, scale) {
   world.scale.set(scale);
   world.x = viewWidth / 2 - x * scale;
   world.y = viewHeight / 2 - y * scale;
+}
+
+export function lerpToward(world, viewWidth, viewHeight, x, y, alpha = 0.14) {
+  const scale = world.scale.x;
+  const targetX = viewWidth / 2 - x * scale;
+  const targetY = viewHeight / 2 - y * scale;
+  world.x += (targetX - world.x) * alpha;
+  world.y += (targetY - world.y) * alpha;
 }

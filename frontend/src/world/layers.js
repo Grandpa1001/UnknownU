@@ -77,13 +77,14 @@ export function organismRadius(organism) {
   return Math.max(14, (organism.size || 8) * 1.8);
 }
 
-export function hitOrganism(organisms, worldX, worldY) {
+export function hitOrganism(organisms, worldX, worldY, scale = 1) {
   let best = null;
   let bestDist = Infinity;
+  const minRadius = 12 / Math.max(scale, 0.02);
   for (const organism of organisms) {
     const x = organism.position?.x ?? organism.x;
     const y = organism.position?.y ?? organism.y;
-    const radius = organismRadius(organism) + 4;
+    const radius = Math.max(organismRadius(organism) + 4, minRadius);
     const dx = x - worldX;
     const dy = y - worldY;
     const dist = dx * dx + dy * dy;
@@ -95,7 +96,26 @@ export function hitOrganism(organisms, worldX, worldY) {
   return best;
 }
 
-export function syncOrganisms(layer, sprites, organisms, onPick) {
+export function drawTags(layer, organisms, taggedIds) {
+  layer.removeChildren();
+  const tagged = new Set(taggedIds);
+  for (const organism of organisms) {
+    if (!tagged.has(organism.id)) {
+      continue;
+    }
+    const radius = organismRadius(organism);
+    const mark = new Graphics();
+    mark.poly([0, 0, -5, 10, 5, 10]).fill(0xffd700);
+    mark.position.set(
+      organism.position?.x ?? organism.x,
+      (organism.position?.y ?? organism.y) - radius - 12,
+    );
+    mark.eventMode = "none";
+    layer.addChild(mark);
+  }
+}
+
+export function syncOrganisms(layer, sprites, organisms) {
   const seen = new Set();
   for (const organism of organisms) {
     seen.add(organism.id);
@@ -105,12 +125,7 @@ export function syncOrganisms(layer, sprites, organisms, onPick) {
       const radius = organismRadius(organism);
       graphic.circle(0, 0, radius + 2).fill(0xf2f6ff);
       graphic.circle(0, 0, radius).fill(CREATURE);
-      graphic.eventMode = "static";
-      graphic.cursor = "pointer";
-      graphic.on("pointerdown", (event) => {
-        event.stopPropagation();
-        onPick?.(graphic.organismId);
-      });
+      graphic.eventMode = "none";
       layer.addChild(graphic);
       sprites.set(organism.id, graphic);
     }

@@ -94,7 +94,7 @@ def save_world(connection: sqlite3.Connection, world: World) -> int:
         )
         world.db_id = int(cursor.lastrowid)
     else:
-        connection.execute(
+        cursor = connection.execute(
             """
             UPDATE worlds
             SET current_tick = ?, status = ?, snapshot_json = ?, max_tick = ?
@@ -102,6 +102,23 @@ def save_world(connection: sqlite3.Connection, world: World) -> int:
             """,
             (world.current_tick, world.status, snapshot, world.max_tick, world.db_id),
         )
+        if cursor.rowcount == 0:
+            connection.execute(
+                """
+                INSERT INTO worlds (id, name, current_tick, seed, status, initial_organism_count, max_tick, snapshot_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    world.db_id,
+                    world.name,
+                    world.current_tick,
+                    world.seed,
+                    world.status,
+                    world.initial_organism_count,
+                    world.max_tick,
+                    snapshot,
+                ),
+            )
     connection.execute("DELETE FROM events WHERE world_id = ?", (world.db_id,))
     connection.executemany(
         """

@@ -83,14 +83,18 @@ class SimulationService:
         world = World(seed=seed, initial_organisms=organism_count)
         world.name = name
         world.max_tick = max_tick
+        next_id = 1
         if self.db_path is not None:
             connection = connect(self.db_path)
+            row = connection.execute("SELECT COALESCE(MAX(id), 0) FROM worlds").fetchone()
+            next_id = int(row[0]) + 1
             reset_database(connection)
-            world.db_id = None
+            world.db_id = next_id
             save_world(connection, world)
             connection.close()
         else:
-            world.db_id = 1
+            previous = self.world.db_id if self.world is not None else 0
+            world.db_id = int(previous or 0) + 1
         with self.lock:
             self.world = world
         return self.world_summary(world)
@@ -194,6 +198,8 @@ class SimulationService:
         births = sum(1 for event in world.events if event.type == "BIRTH")
         deaths = sum(1 for event in world.events if event.type == "DEATH")
         generation = max((organism.generation for organism in world.organisms), default=0)
+        if world.dead:
+            generation = max(generation, max((record.get("generation") or 0) for record in world.dead))
         variants = {organism.feature for organism in world.organisms}
         return {
             "tick": world.current_tick,
@@ -208,18 +214,44 @@ class SimulationService:
 
     def organism_payload(self, world: World, organism_id: str) -> dict | None:
         organism = next((item for item in world.organisms if item.id == organism_id), None)
-        if organism is None:
+        if organism is not None:
+            payload = organism_public(organism)
+            payload["alive"] = True
+            payload["genome"] = {
+                "traits": organism.genome.traits.__dict__,
+                "program": list(organism.genome.program),
+                "morphology": organism.genome.morphology.__dict__,
+            }
+            payload["prediction_score"] = dict(organism.prediction_score)
+            payload["thinking_quality"] = organism.thinking_quality
+            payload["children"] = self._children_of(world, organism_id)
+            return payload
+        record = next((item for item in world.dead if item.get("id") == organism_id), None)
+        if record is None:
             return None
-        payload = organism_public(organism)
-        payload["genome"] = {
-            "traits": organism.genome.traits.__dict__,
-            "program": list(organism.genome.program),
-            "morphology": organism.genome.morphology.__dict__,
+        genome = record.get("genome") or {}
+        morphology = genome.get("morphology") or {}
+        return {
+            "id": record["id"],
+            "alive": False,
+            "energy": record.get("final_energy"),
+            "age": record.get("final_age"),
+            "generation": record.get("generation"),
+            "feature": morphology.get("feature"),
+            "parent_id": record.get("parent_id"),
+            "died_at_tick": record.get("died_at_tick"),
+            "born_at_tick": record.get("born_at_tick"),
+            "genome": genome,
+            "prediction_score": {},
+            "children": self._children_of(world, organism_id),
+            "is_thinking": False,
+            "last_action": None,
         }
-        payload["prediction_score"] = dict(organism.prediction_score)
-        payload["thinking_quality"] = organism.thinking_quality
-        payload["children"] = [item.id for item in world.organisms if item.parent_id == organism_id]
-        return payload
+
+    def _children_of(self, world: World, organism_id: str) -> list[str]:
+        living = [item.id for item in world.organisms if item.parent_id == organism_id]
+        dead = [item["id"] for item in world.dead if item.get("parent_id") == organism_id]
+        return living + dead
 
     def world_summary(self, world: World) -> dict:
         return {
@@ -238,7 +270,8 @@ class SimulationService:
                 if world is None or world.status != "running":
                     continue
                 world.tick()
-                if self.db_path is not None and world.current_tick % SNAPSHOT_INTERVAL == 0:
+                ended = world.status != "running"
+                if self.db_path is not None and (ended or world.current_tick % SNAPSHOT_INTERVAL == 0):
                     connection = connect(self.db_path)
                     save_world(connection, world)
                     connection.close()
