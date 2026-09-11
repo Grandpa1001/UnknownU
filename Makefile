@@ -1,4 +1,4 @@
-.PHONY: install test backend frontend dev sim
+.PHONY: install test backend frontend dev sim sim-move
 
 BACKEND := backend
 FRONTEND := frontend
@@ -29,3 +29,6 @@ dev:
 
 sim:
 	cd $(BACKEND) && .venv/bin/python -m app.simulation.runner --ticks 10 --seed 1 --print
+
+sim-move:
+	cd $(BACKEND) && .venv/bin/python -m app.simulation.runner --ticks 100 --seed 1 --print-every 20

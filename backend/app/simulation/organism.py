@@ -16,6 +16,8 @@ class Organism:
     generation: int
     genome: Genome
     parent_id: str | None = None
+    last_action: str | None = None
+    last_perception: object | None = None
 
     @property
     def size(self) -> int:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from random import Random
 
+from app.simulation.actions import execute_program
 from app.simulation.constants import (
     DEFAULT_ORGANISM_COUNT,
     ORGANISM_ENERGY_MAX,
@@ -44,6 +45,7 @@ class World:
         self.current_tick += 1
         for organism in self.organisms:
             organism.age += 1
+            execute_program(organism, self)
 
     def _spawn_organisms(self, count: int) -> list[Organism]:
         organisms: list[Organism] = []

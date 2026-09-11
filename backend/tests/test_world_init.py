@@ -33,14 +33,12 @@ def test_different_seed_changes_layout() -> None:
     assert _tree_snapshot(a) != _tree_snapshot(b)
 
 
-def test_tick_increments_and_ages_but_does_not_move() -> None:
+def test_tick_increments_age() -> None:
     world = World(seed=1, initial_organisms=3)
-    start_positions = [(o.id, o.x, o.y) for o in world.organisms]
     for _ in range(10):
         world.tick()
     assert world.current_tick == 10
     assert all(organism.age == 10 for organism in world.organisms)
-    assert [(o.id, o.x, o.y) for o in world.organisms] == start_positions
 
 
 def test_spawn_counts_and_apples_on_trees() -> None:
