@@ -4,7 +4,7 @@ import random
 import threading
 from pathlib import Path
 
-from app.persistence.database import connect, reset_database, save_world
+from app.persistence.database import connect, load_world, reset_database, save_world
 from app.simulation.constants import SNAPSHOT_INTERVAL, TILE_SIZE
 from app.simulation.world import World
 
@@ -44,9 +44,26 @@ class SimulationService:
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
+        self.restore()
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="unknown-tick", daemon=True)
         self._thread.start()
+
+    def restore(self) -> None:
+        if self.world is not None or self.db_path is None:
+            return
+        path = Path(self.db_path)
+        if not path.exists():
+            return
+        try:
+            connection = connect(path)
+            world = load_world(connection)
+            connection.close()
+        except FileNotFoundError:
+            return
+        with self.lock:
+            if self.world is None:
+                self.world = world
 
     def stop(self) -> None:
         self._stop.set()
@@ -95,18 +112,30 @@ class SimulationService:
         return self.world
 
     def snapshot(self, world_id: int) -> dict:
+        if self.world is None:
+            self.restore()
         with self.lock:
             return self.world_payload(self._locked_world(world_id))
 
     def stats_for(self, world_id: int) -> dict:
+        if self.world is None:
+            self.restore()
         with self.lock:
             return self.stats(self._locked_world(world_id))
 
     def events_for(self, world_id: int, limit: int = 50) -> dict:
+        if self.world is None:
+            self.restore()
         with self.lock:
             world = self._locked_world(world_id)
             events = world.events[-limit:]
             return {"events": [event.format() for event in events]}
+
+    def live_for(self, world_id: int) -> dict:
+        if self.world is None:
+            self.restore()
+        with self.lock:
+            return self.live_payload(self._locked_world(world_id))
 
     def organism_for(self, organism_id: str) -> dict:
         with self.lock:
@@ -116,10 +145,6 @@ class SimulationService:
             if payload is None:
                 raise KeyError(organism_id)
             return payload
-
-    def live_for(self, world_id: int) -> dict:
-        with self.lock:
-            return self.live_payload(self._locked_world(world_id))
 
     def world_payload(self, world: World, include_terrain: bool = True) -> dict:
         apples = [
@@ -161,7 +186,8 @@ class SimulationService:
                 for tree in world.trees
                 for apple in tree.apples
             ],
-            "events": [event.format() for event in world.events[-8:]],
+            "events": [event.format() for event in world.events[-50:]],
+            "stats": self.stats(world),
         }
 
     def stats(self, world: World) -> dict:

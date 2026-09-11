@@ -94,7 +94,21 @@ def test_websocket_pushes_state(client: TestClient) -> None:
         assert "organisms" in first
         assert "apples" in first
         assert "events" in first
+        assert "stats" in first
+        assert first["stats"]["population"] == 3
         socket.send_text("MOVE")
         second = socket.receive_json()
         assert "tick" in second
         assert "position" in second["organisms"][0]
+
+
+def test_get_restores_world_from_sqlite(client: TestClient) -> None:
+    from app.engine import service
+
+    world_id = _create(client)
+    first = client.get(f"/api/worlds/{world_id}").json()
+    service.world = None
+    restored = client.get(f"/api/worlds/{world_id}").json()
+    assert restored["id"] == world_id
+    assert restored["seed"] == first["seed"]
+    assert restored["tick"] >= 0
