@@ -14,13 +14,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=4000)
     parser.add_argument("--print", dest="do_print", action="store_true")
     parser.add_argument("--print-every", type=int, default=0)
+    parser.add_argument("--print-events", action="store_true")
+    parser.add_argument("--no-apples", action="store_true")
     return parser.parse_args(argv)
 
 
 def dump_world(world: World) -> str:
     lines = [
         (
-            f"seed={world.seed} tick={world.current_tick} "
+            f"seed={world.seed} tick={world.current_tick} status={world.status} "
             f"organisms={len(world.organisms)} trees={len(world.trees)} "
             f"apples={world.apple_count} flowers={len(world.flowers)}"
         )
@@ -43,12 +45,21 @@ def run(argv: list[str] | None = None) -> int:
         width=args.width,
         height=args.height,
         initial_organisms=args.organisms,
+        spawn_apples=not args.no_apples,
     )
+    emit_events = args.print_events or args.print_every or args.do_print
+    cursor = 0
     for _ in range(args.ticks):
         world.tick()
+        if emit_events:
+            for event in world.events[cursor:]:
+                print(event.format())
+            cursor = len(world.events)
         if args.print_every and world.current_tick % args.print_every == 0:
             print(dump_world(world))
             print("---")
+        if world.status != "running":
+            break
     if args.do_print:
         print(dump_world(world))
     return 0

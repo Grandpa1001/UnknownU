@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 
 from app.simulation.constants import (
     CRITICAL_ENERGY,
+    EAT_ENERGY,
+    ENERGY_MAX,
     FOOD_TOUCH_RANGE,
     MOVE_COST,
     MOVE_STEP,
@@ -151,6 +153,36 @@ def wait(organism: Organism) -> None:
     organism.last_action = "WAIT"
 
 
+def _nearest_touching_apple(organism: Organism, world: object):
+    nearest = None
+    nearest_tree = None
+    nearest_distance = FOOD_TOUCH_RANGE
+    for tree in world.trees:
+        for apple in tree.apples:
+            distance = torus_distance(organism.x, organism.y, apple.x, apple.y, world.width, world.height)
+            if distance <= nearest_distance:
+                nearest = apple
+                nearest_tree = tree
+                nearest_distance = distance
+    return nearest, nearest_tree
+
+
+def eat(organism: Organism, world: object) -> bool:
+    apple, tree = _nearest_touching_apple(organism, world)
+    if apple is None or tree is None:
+        return False
+    before = organism.energy
+    tree.apples.remove(apple)
+    organism.energy = min(ENERGY_MAX, organism.energy + EAT_ENERGY)
+    organism.last_action = "EAT"
+    world.record_event(
+        "EAT",
+        organism.id,
+        {"apple_id": apple.id, "tree_id": tree.id, "energy_before": before, "energy_after": organism.energy},
+    )
+    return True
+
+
 def _energy_is_critical(organism: Organism) -> bool:
     return organism.energy <= CRITICAL_ENERGY
 
@@ -175,13 +207,12 @@ def execute_program(organism: Organism, world: object) -> None:
             continue
         if acted:
             continue
-        if instruction == "IF_FOOD_NEARBY->MOVE" and perception and perception.food:
+        if instruction == "IF_FOOD_TOUCH->EAT" and _food_touching(perception):
+            eat(organism, world)
+            acted = True
+        elif instruction == "IF_FOOD_NEARBY->MOVE" and perception and perception.food:
             turn_towards(organism, perception.food[0].direction)
             move(organism, world)
-            acted = True
-        elif instruction == "IF_FOOD_TOUCH->EAT" and _food_touching(perception):
-            # Jedzenie wchodzi w M3 — na razie zostań przy jabłku.
-            wait(organism)
             acted = True
         elif instruction == "IF_ENERGY_LOW->WAIT" and _energy_is_critical(organism):
             wait(organism)

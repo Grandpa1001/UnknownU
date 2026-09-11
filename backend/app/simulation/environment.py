@@ -96,5 +96,18 @@ def generate_flowers(rng: Random, width: int = WORLD_WIDTH, height: int = WORLD_
     ]
 
 
+def spawn_apple_on_tree(rng: Random, tree: Tree, apple_id: str) -> Apple | None:
+    if len(tree.apples) >= APPLES_PER_TREE_MAX:
+        return None
+    apple = Apple(
+        id=apple_id,
+        tree_id=tree.id,
+        x=tree.x + rng.uniform(-18.0, 18.0),
+        y=tree.y + rng.uniform(-22.0, -4.0),
+    )
+    tree.apples.append(apple)
+    return apple
+
+
 def apple_count(trees: list[Tree]) -> int:
     return sum(len(tree.apples) for tree in trees)
