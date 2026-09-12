@@ -5,7 +5,6 @@ from random import Random
 
 from app.simulation.constants import (
     DEFAULT_PROGRAM,
-    FEATURES,
     ORGANISM_SIZE_MAX,
     ORGANISM_SIZE_MIN,
 )
@@ -23,17 +22,13 @@ class Traits:
 @dataclass(frozen=True)
 class Morphology:
     size_base: int
-    feature: str
-    has_benefit: bool
 
 
 @dataclass(frozen=True)
 class Genome:
     traits: Traits
     program: tuple[str, ...] = field(default=DEFAULT_PROGRAM)
-    morphology: Morphology = field(
-        default_factory=lambda: Morphology(size_base=8, feature="none", has_benefit=False)
-    )
+    morphology: Morphology = field(default_factory=lambda: Morphology(size_base=8))
 
 
 def _unit(rng: Random) -> float:
@@ -41,7 +36,6 @@ def _unit(rng: Random) -> float:
 
 
 def generate_genome(rng: Random) -> Genome:
-    feature = rng.choice(FEATURES)
     size_base = rng.randint(ORGANISM_SIZE_MIN, ORGANISM_SIZE_MAX)
     return Genome(
         traits=Traits(
@@ -52,11 +46,7 @@ def generate_genome(rng: Random) -> Genome:
             reproduction_threshold=round(rng.uniform(0.6, 1.0), 3),
         ),
         program=DEFAULT_PROGRAM,
-        morphology=Morphology(
-            size_base=size_base,
-            feature=feature,
-            has_benefit=feature != "none",
-        ),
+        morphology=Morphology(size_base=size_base),
     )
 
 
@@ -66,6 +56,21 @@ def copy_genome(genome: Genome) -> Genome:
         program=genome.program,
         morphology=replace(genome.morphology),
     )
+
+
+def crossover_genome(mother: Genome, father: Genome, rng: Random) -> Genome:
+    left, right = mother.traits, father.traits
+    traits = Traits(
+        bravery=rng.choice((left.bravery, right.bravery)),
+        stress=rng.choice((left.stress, right.stress)),
+        stupidity=rng.choice((left.stupidity, right.stupidity)),
+        hunger_threshold=rng.choice((left.hunger_threshold, right.hunger_threshold)),
+        reproduction_threshold=rng.choice((left.reproduction_threshold, right.reproduction_threshold)),
+    )
+    length = min(len(mother.program), len(father.program))
+    program = tuple(rng.choice((mother.program[index], father.program[index])) for index in range(length))
+    size_base = rng.choice((mother.morphology.size_base, father.morphology.size_base))
+    return Genome(traits=traits, program=program, morphology=Morphology(size_base=size_base))
 
 
 def _clamp01(value: float) -> float:
@@ -81,7 +86,7 @@ def mutate_genome(genome: Genome, rng: Random) -> tuple[Genome, str]:
 
 
 def _try_mutate(genome: Genome, rng: Random) -> tuple[Genome, str]:
-    kind = rng.choice(("trait", "program", "size", "feature"))
+    kind = rng.choice(("trait", "program", "size"))
     if kind == "trait":
         name = rng.choice(
             ("bravery", "stress", "stupidity", "hunger_threshold", "reproduction_threshold")
@@ -101,15 +106,6 @@ def _try_mutate(genome: Genome, rng: Random) -> tuple[Genome, str]:
             new = old - 1 if old == ORGANISM_SIZE_MAX else old + 1
         morph = replace(genome.morphology, size_base=new)
         return replace(genome, morphology=morph), f"size {old}→{new}"
-    if kind == "feature":
-        options = [item for item in FEATURES if item != genome.morphology.feature]
-        new_feature = rng.choice(options)
-        morph = replace(
-            genome.morphology,
-            feature=new_feature,
-            has_benefit=new_feature != "none",
-        )
-        return replace(genome, morphology=morph), f"feature {genome.morphology.feature}→{new_feature}"
     index = rng.randrange(len(genome.program))
     old = genome.program[index]
     candidates = [item for item in DEFAULT_PROGRAM if item != old] or list(DEFAULT_PROGRAM)

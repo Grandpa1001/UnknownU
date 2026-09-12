@@ -5,7 +5,8 @@ import threading
 from pathlib import Path
 
 from app.persistence.database import connect, load_world, reset_database, save_world
-from app.simulation.constants import SNAPSHOT_INTERVAL, TILE_SIZE
+from app.simulation.chronicle import world_chronicle
+from app.simulation.constants import SNAPSHOT_INTERVAL, TILE_SIZE, PILLAR_RADIUS
 from app.simulation.world import World
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,12 +26,32 @@ def organism_public(organism) -> dict:
         "energy": organism.energy,
         "age": organism.age,
         "generation": organism.generation,
-        "feature": organism.feature,
         "size": organism.size,
+        "carrying": organism.carrying is not None,
         "is_thinking": organism.is_thinking,
         "last_action": organism.last_action,
+        "speed": round(float(organism.speed), 2),
         "parent_id": organism.parent_id,
+        "other_parent_id": organism.other_parent_id,
     }
+
+
+def _apple_public(apple) -> dict:
+    return {"id": apple.id, "tree_id": apple.tree_id, "x": round(apple.x, 2), "y": round(apple.y, 2)}
+
+
+def world_apples(world: World) -> list[dict]:
+    hanging = [_apple_public(apple) for tree in world.trees for apple in tree.apples]
+    ground = [_apple_public(apple) for apple in world.ground_apples]
+    return hanging + ground
+
+
+def _berry_public(berry) -> dict:
+    return {"id": berry.id, "bush_id": berry.bush_id, "x": round(berry.x, 2), "y": round(berry.y, 2)}
+
+
+def world_berries(world: World) -> list[dict]:
+    return [_berry_public(berry) for bush in getattr(world, "bushes", []) for berry in bush.berries]
 
 
 class SimulationService:
@@ -135,6 +156,12 @@ class SimulationService:
             events = world.events[-limit:]
             return {"events": [event.format() for event in events]}
 
+    def chronicle_for(self, world_id: int) -> dict:
+        if self.world is None:
+            self.restore()
+        with self.lock:
+            return world_chronicle(self._locked_world(world_id))
+
     def live_for(self, world_id: int) -> dict:
         if self.world is None:
             self.restore()
@@ -151,11 +178,6 @@ class SimulationService:
             return payload
 
     def world_payload(self, world: World, include_terrain: bool = True) -> dict:
-        apples = [
-            {"id": apple.id, "tree_id": apple.tree_id, "x": round(apple.x, 2), "y": round(apple.y, 2)}
-            for tree in world.trees
-            for apple in tree.apples
-        ]
         payload = {
             "id": world.db_id,
             "name": world.name,
@@ -165,11 +187,22 @@ class SimulationService:
             "width": world.width,
             "height": world.height,
             "tile_size": TILE_SIZE,
+            "cache": {"x": round(world.cache_x, 2), "y": round(world.cache_y, 2)},
+            "pillar": {
+                "x": round(world.pillar_x, 2),
+                "y": round(world.pillar_y, 2),
+                "radius": PILLAR_RADIUS,
+            },
             "trees": [
                 {"id": tree.id, "x": round(tree.x, 2), "y": round(tree.y, 2), "apples": len(tree.apples)}
                 for tree in world.trees
             ],
-            "apples": apples,
+            "apples": world_apples(world),
+            "bushes": [
+                {"id": bush.id, "x": round(bush.x, 2), "y": round(bush.y, 2), "berries": len(bush.berries)}
+                for bush in getattr(world, "bushes", [])
+            ],
+            "berries": world_berries(world),
             "flowers": [
                 {"id": flower.id, "x": round(flower.x, 2), "y": round(flower.y, 2), "variant": flower.variant}
                 for flower in world.flowers
@@ -178,21 +211,24 @@ class SimulationService:
         }
         if include_terrain:
             payload["terrain"] = world.terrain
+        if world.status != "running":
+            payload["chronicle"] = world_chronicle(world)
         return payload
 
     def live_payload(self, world: World) -> dict:
-        return {
+        payload = {
             "tick": world.current_tick,
             "status": world.status,
             "organisms": [organism_public(organism) for organism in world.organisms],
-            "apples": [
-                {"id": apple.id, "tree_id": apple.tree_id, "x": round(apple.x, 2), "y": round(apple.y, 2)}
-                for tree in world.trees
-                for apple in tree.apples
-            ],
+            "apples": world_apples(world),
+            "berries": world_berries(world),
+            "cache": {"x": round(world.cache_x, 2), "y": round(world.cache_y, 2)},
             "events": [event.format() for event in world.events[-50:]],
             "stats": self.stats(world),
         }
+        if world.status != "running":
+            payload["chronicle"] = world_chronicle(world)
+        return payload
 
     def stats(self, world: World) -> dict:
         births = sum(1 for event in world.events if event.type == "BIRTH")
@@ -200,7 +236,7 @@ class SimulationService:
         generation = max((organism.generation for organism in world.organisms), default=0)
         if world.dead:
             generation = max(generation, max((record.get("generation") or 0) for record in world.dead))
-        variants = {organism.feature for organism in world.organisms}
+        variants = {organism.size for organism in world.organisms}
         return {
             "tick": world.current_tick,
             "status": world.status,
@@ -209,6 +245,7 @@ class SimulationService:
             "births": births,
             "deaths": deaths,
             "apples": world.apple_count,
+            "berries": world.berry_count,
             "variants": len(variants),
         }
 
@@ -224,6 +261,7 @@ class SimulationService:
             }
             payload["prediction_score"] = dict(organism.prediction_score)
             payload["thinking_quality"] = organism.thinking_quality
+            payload["speed"] = round(float(organism.speed), 2)
             payload["children"] = self._children_of(world, organism_id)
             return payload
         record = next((item for item in world.dead if item.get("id") == organism_id), None)
@@ -237,8 +275,10 @@ class SimulationService:
             "energy": record.get("final_energy"),
             "age": record.get("final_age"),
             "generation": record.get("generation"),
-            "feature": morphology.get("feature"),
+            "size": morphology.get("size_base"),
+            "carrying": False,
             "parent_id": record.get("parent_id"),
+            "other_parent_id": record.get("other_parent_id"),
             "died_at_tick": record.get("died_at_tick"),
             "born_at_tick": record.get("born_at_tick"),
             "genome": genome,
@@ -249,8 +289,16 @@ class SimulationService:
         }
 
     def _children_of(self, world: World, organism_id: str) -> list[str]:
-        living = [item.id for item in world.organisms if item.parent_id == organism_id]
-        dead = [item["id"] for item in world.dead if item.get("parent_id") == organism_id]
+        living = [
+            item.id
+            for item in world.organisms
+            if item.parent_id == organism_id or item.other_parent_id == organism_id
+        ]
+        dead = [
+            item["id"]
+            for item in world.dead
+            if item.get("parent_id") == organism_id or item.get("other_parent_id") == organism_id
+        ]
         return living + dead
 
     def world_summary(self, world: World) -> dict:

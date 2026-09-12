@@ -40,6 +40,14 @@ def get_events(world_id: int, limit: int = 50) -> dict:
         raise HTTPException(status_code=404, detail="world not found") from None
 
 
+@router.get("/api/worlds/{world_id}/chronicle")
+def get_chronicle(world_id: int) -> dict:
+    try:
+        return service.chronicle_for(world_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="world not found") from None
+
+
 @router.get("/api/organisms/{organism_id}")
 def get_organism(organism_id: str) -> dict:
     try:

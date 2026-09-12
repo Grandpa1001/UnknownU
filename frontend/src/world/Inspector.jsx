@@ -8,6 +8,16 @@ function fmt(value) {
   return value ?? "—";
 }
 
+function scoresLabel(scores) {
+  if (!scores || typeof scores !== "object") {
+    return "—";
+  }
+  const parts = Object.entries(scores)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([action, value]) => `${action} ${fmt(value)}`);
+  return parts.length ? parts.join(" · ") : "—";
+}
+
 export default function Inspector({
   organismId,
   live,
@@ -91,14 +101,18 @@ export default function Inspector({
           {alive ? null : (
             <div><dt>zgon</dt><dd>tick {fmt(file.died_at_tick)}</dd></div>
           )}
-          <div><dt>cecha</dt><dd>{body.feature ?? file.feature}</dd></div>
+          <div><dt>rozmiar</dt><dd>{fmt(body.size ?? file.size)}</dd></div>
+          <div><dt>niesie</dt><dd>{body.carrying ? "jabłko" : "nie"}</dd></div>
           <div><dt>energia</dt><dd>{fmt(body.energy)}</dd></div>
           <div><dt>wiek</dt><dd>{fmt(body.age)}</dd></div>
           <div><dt>pokolenie</dt><dd>{fmt(body.generation)}</dd></div>
-          <div><dt>rodzic</dt><dd>{body.parent_id ?? "—"}</dd></div>
+          <div><dt>rodzice</dt><dd>{[body.parent_id, body.other_parent_id].filter(Boolean).join(" · ") || "—"}</dd></div>
           <div><dt>dzieci</dt><dd>{children.length ? children.join(", ") : "—"}</dd></div>
           <div><dt>akcja</dt><dd>{body.last_action ?? "—"}</dd></div>
+          <div><dt>prędkość</dt><dd>{fmt(body.speed)}</dd></div>
           <div><dt>myśli</dt><dd>{body.is_thinking ? "tak" : "nie"}</dd></div>
+          <div><dt>jakość myśli</dt><dd>{fmt(body.thinking_quality ?? file.thinking_quality)}</dd></div>
+          <div><dt>nauka</dt><dd>{scoresLabel(body.prediction_score ?? file.prediction_score)}</dd></div>
           <div><dt>bravery</dt><dd>{fmt(traits.bravery)}</dd></div>
           <div><dt>stress</dt><dd>{fmt(traits.stress)}</dd></div>
           <div><dt>stupidity</dt><dd>{fmt(traits.stupidity)}</dd></div>

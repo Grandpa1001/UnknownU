@@ -34,10 +34,15 @@ def test_create_and_get_world(client: TestClient) -> None:
     assert body["trees"]
     assert body["apples"]
     assert body["flowers"]
+    assert body["bushes"]
+    assert body["berries"]
     assert body["terrain"]
-    assert len(body["organisms"]) == 3
+    assert len(body["organisms"]) >= 3
     assert "x" in body["organisms"][0]["position"]
     assert "y" in body["organisms"][0]["position"]
+    assert body["pillar"]["x"] == body["width"] / 2
+    assert body["pillar"]["y"] == body["height"] / 2
+    assert body["pillar"]["radius"] > 0
 
 
 def test_two_gets_show_live_motion(client: TestClient) -> None:
@@ -57,7 +62,7 @@ def test_stats_events_and_organism(client: TestClient) -> None:
     world_id = _create(client)
     stats = client.get(f"/api/worlds/{world_id}/stats")
     assert stats.status_code == 200
-    assert stats.json()["population"] == 3
+    assert stats.json()["population"] >= 3
     events = client.get(f"/api/worlds/{world_id}/events?limit=50")
     assert events.status_code == 200
     assert "events" in events.json()
@@ -103,7 +108,7 @@ def test_websocket_pushes_state(client: TestClient) -> None:
         assert "apples" in first
         assert "events" in first
         assert "stats" in first
-        assert first["stats"]["population"] == 3
+        assert first["stats"]["population"] >= 3
         socket.send_text("MOVE")
         second = socket.receive_json()
         assert "tick" in second
@@ -155,6 +160,29 @@ def test_max_tick_marks_world_finished(client: TestClient) -> None:
     stats = client.get(f"/api/worlds/{world_id}/stats").json()
     assert stats["status"] == "finished"
     assert stats["tick"] >= 2
+
+
+def test_chronicle_endpoint_after_extinction(client: TestClient) -> None:
+    world_id = _create(client)
+    from app.engine import service
+
+    with service.lock:
+        for organism in service.world.organisms:
+            organism.energy = 0
+        service.world._resolve_deaths()
+    response = client.get(f"/api/worlds/{world_id}/chronicle")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "extinct"
+    assert body["cause"]["code"]
+    assert body["units"]["ever_lived"] == 3
+    assert body["journal"]["counts"]["DEATH"] == 3
+    snapshot = client.get(f"/api/worlds/{world_id}").json()
+    assert snapshot["chronicle"]["cause"]["code"] == body["cause"]["code"]
+
+
+def test_chronicle_missing_world(client: TestClient) -> None:
+    assert client.get("/api/worlds/999/chronicle").status_code == 404
 
 
 def test_get_restores_world_from_sqlite(client: TestClient) -> None:

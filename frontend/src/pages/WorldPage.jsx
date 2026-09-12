@@ -15,6 +15,7 @@ function StatsPanel({ stats, name }) {
     ["narodziny", stats?.births ?? "—"],
     ["zgony", stats?.deaths ?? "—"],
     ["jabłka", stats?.apples ?? "—"],
+    ["jagody", stats?.berries ?? "—"],
   ];
   return (
     <dl className="stats">
@@ -72,22 +73,96 @@ function TaggedList({ ids, organisms, selectedId, onSelect, ready }) {
   );
 }
 
-function EndBanner({ status, stats }) {
+const JOURNAL_LABELS = {
+  EAT: "posiłki",
+  PICKUP: "zbiory",
+  SHARE: "przekazania",
+  DROP: "złożenia",
+  BIRTH: "narodziny",
+  DEATH: "zgony",
+  MUTATION: "mutacje",
+  APPLE_RESPAWN: "odrosty",
+  BERRY_RESPAWN: "jagody",
+  POPULATION_CAP: "limit",
+};
+
+function EndBanner({ status, stats, chronicle }) {
   if (status !== "extinct" && status !== "finished") {
     return null;
   }
   const extinct = status === "extinct";
+  const cause = chronicle?.cause;
+  const units = chronicle?.units;
+  const journal = chronicle?.journal;
+  const counts = journal?.counts;
   return (
     <div className="end-overlay" role="status" data-testid="end-overlay">
       <h2>{extinct ? "wymarcie" : "koniec biegu"}</h2>
-      <p>
+      <p className="end-overlay-lead">
         {extinct
           ? "Nikt już nie żyje. Możesz nadal oglądać archiwum."
           : "Osiągnięto limit ticków. Archiwum zostaje."}
       </p>
-      <p className="end-overlay-meta">
-        tick {stats?.tick ?? "—"} · zgony {stats?.deaths ?? "—"} · pokolenie {stats?.generation ?? "—"}
-      </p>
+      {cause ? (
+        <section className="end-section" aria-label="przyczyna">
+          <h3>{cause.headline}</h3>
+          <p>{cause.text}</p>
+        </section>
+      ) : null}
+      {units ? (
+        <section className="end-section" aria-label="jednostki">
+          <h3>jednostki</h3>
+          <p className="end-overlay-meta">
+            {units.ever_lived} osobników · {units.founders} założycieli · pokolenie {units.max_generation}
+            {units.surviving ? ` · żyje ${units.surviving}` : ""}
+          </p>
+          <ul className="end-units">
+            {units.kinds.map((kind) => (
+              <li key={kind.id}>
+                <span>{kind.label}</span>
+                <span>
+                  {kind.count}
+                  {kind.longest_lived ? ` · ${kind.longest_lived.id}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {journal ? (
+        <section className="end-section" aria-label="dziennik">
+          <h3>dziennik</h3>
+          <ul className="end-units">
+            <li>
+              <span>szczyt populacji</span>
+              <span>
+                {journal.peak_population} · tick {journal.peak_tick}
+              </span>
+            </li>
+            {Object.entries(JOURNAL_LABELS)
+              .filter(([key]) => ["EAT", "BIRTH", "DEATH"].includes(key) || (counts?.[key] ?? 0) > 0)
+              .map(([key, label]) => (
+                <li key={key}>
+                  <span>{label}</span>
+                  <span>{counts?.[key] ?? 0}</span>
+                </li>
+              ))}
+          </ul>
+          {journal.highlights?.length ? (
+            <ol className="end-highlights">
+              {journal.highlights.map((item) => (
+                <li key={`${item.tick}-${item.text}`}>
+                  tick {item.tick} · {item.text}
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </section>
+      ) : (
+        <p className="end-overlay-meta">
+          tick {stats?.tick ?? "—"} · zgony {stats?.deaths ?? "—"} · pokolenie {stats?.generation ?? "—"}
+        </p>
+      )}
       <Link to="/">nowy świat</Link>
     </div>
   );
@@ -172,7 +247,7 @@ export default function WorldPage() {
               onFollowLost={onFollowLost}
             />
           ) : null}
-          <EndBanner status={status} stats={stats} />
+          <EndBanner status={status} stats={stats} chronicle={live?.chronicle ?? snapshot?.chronicle} />
           {notice ? (
             <p className="follow-notice" role="status">
               {notice}

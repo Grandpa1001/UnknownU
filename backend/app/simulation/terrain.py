@@ -73,4 +73,25 @@ def generate_terrain(width: int, height: int, seed: int) -> list[list[str]]:
             sample = fbm(tx / 8.0, ty / 8.0, seed)
             row.append(noise_to_terrain(sample))
         tiles.append(row)
+    stamp_pillar_plaza(tiles, width, height)
     return tiles
+
+
+def stamp_pillar_plaza(terrain: list[list[str]], width: int, height: int, tile_size: int = TILE_SIZE) -> None:
+    if not terrain or not terrain[0]:
+        return
+    rows = len(terrain)
+    cols = len(terrain[0])
+    cx = width / (2.0 * tile_size) - 0.5
+    cy = height / (2.0 * tile_size) - 0.5
+    inner = 2.4
+    outer = 5.8
+    for ty in range(rows):
+        dy = ty - cy
+        for tx in range(cols):
+            dx = tx - cx
+            distance = math.hypot(dx, dy)
+            if distance <= inner:
+                terrain[ty][tx] = TERRAIN_DIRT
+            elif distance <= outer and terrain[ty][tx] != TERRAIN_HILLS:
+                terrain[ty][tx] = TERRAIN_DIRT

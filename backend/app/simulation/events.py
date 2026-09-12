@@ -14,7 +14,7 @@ class Event:
         if self.type == "EAT":
             before = self.data.get("energy_before")
             after = self.data.get("energy_after")
-            apple = self.data.get("apple_id")
+            apple = self.data.get("berry_id") or self.data.get("apple_id")
             return f"tick={self.tick} EAT {self.organism_id} {apple} energy {before:.0f}→{after:.0f}"
         if self.type == "DEATH":
             age = self.data.get("age")
@@ -22,12 +22,24 @@ class Event:
         if self.type == "BIRTH":
             return (
                 f"tick={self.tick} BIRTH child={self.organism_id} "
-                f"parent={self.data.get('parent_id')} generation={self.data.get('generation')}"
+                f"parents={self.data.get('parent_id')}+{self.data.get('mate_id')} "
+                f"generation={self.data.get('generation')}"
             )
         if self.type == "MUTATION":
             return f"tick={self.tick} MUTATION {self.organism_id} {self.data.get('description')}"
         if self.type == "APPLE_RESPAWN":
             return f"tick={self.tick} APPLE_RESPAWN {self.data.get('apple_id')} tree={self.data.get('tree_id')}"
+        if self.type == "BERRY_RESPAWN":
+            return f"tick={self.tick} BERRY_RESPAWN {self.data.get('berry_id')} bush={self.data.get('bush_id')}"
+        if self.type == "PICKUP":
+            return f"tick={self.tick} PICKUP {self.organism_id} {self.data.get('apple_id')}"
+        if self.type == "SHARE":
+            return (
+                f"tick={self.tick} SHARE {self.organism_id}→{self.data.get('recipient_id')} "
+                f"{self.data.get('apple_id')}"
+            )
+        if self.type == "DROP":
+            return f"tick={self.tick} DROP {self.organism_id} {self.data.get('apple_id')}"
         extra = f" {self.data}" if self.data else ""
         return f"tick={self.tick} {self.type} {self.organism_id or '-'}{extra}"
 

@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import { PALETTE } from "./config.js";
 import {
   CREATURE_H,
   DEATH_FADE_MS,
@@ -64,6 +65,42 @@ export function makeTrees(trees) {
   return layer;
 }
 
+export function makeBushes(bushes) {
+  const layer = new Container();
+  layer.eventMode = "none";
+  const atlas = getAtlas();
+  for (const bush of bushes ?? []) {
+    const sprite = pixelSprite(atlas.bush, 0.5, 0.78);
+    sprite.position.set(bush.x, bush.y);
+    layer.addChild(sprite);
+  }
+  return layer;
+}
+
+export function makePillar(pillar) {
+  const layer = new Container();
+  layer.eventMode = "none";
+  const x = pillar.x;
+  const y = pillar.y;
+  const radius = pillar.radius || 22;
+  const plaza = new Graphics();
+  plaza.circle(0, 0, radius + 20).fill({
+    color: Number.parseInt(PALETTE.dirtDark.slice(1), 16),
+    alpha: 0.38,
+  });
+  plaza.circle(0, 0, radius + 8).stroke({
+    width: 2,
+    color: Number.parseInt(PALETTE.stoneDark.slice(1), 16),
+    alpha: 0.8,
+  });
+  plaza.position.set(x, y);
+  layer.addChild(plaza);
+  const sprite = pixelSprite(getAtlas().pillar, 0.5, 0.86);
+  sprite.position.set(x, y);
+  layer.addChild(sprite);
+  return layer;
+}
+
 export function syncApples(layer, sprites, apples) {
   const seen = new Set();
   const atlas = getAtlas();
@@ -85,19 +122,45 @@ export function syncApples(layer, sprites, apples) {
   }
 }
 
+export function syncBerries(layer, sprites, berries) {
+  const seen = new Set();
+  const atlas = getAtlas();
+  for (const berry of berries ?? []) {
+    seen.add(berry.id);
+    let sprite = sprites.get(berry.id);
+    if (!sprite) {
+      sprite = pixelSprite(atlas.berry);
+      layer.addChild(sprite);
+      sprites.set(berry.id, sprite);
+    }
+    sprite.position.set(berry.x, berry.y);
+  }
+  for (const [id, sprite] of sprites) {
+    if (!seen.has(id)) {
+      sprite.destroy();
+      sprites.delete(id);
+    }
+  }
+}
+
 function createOrganismVisual(organism) {
   const atlas = getAtlas();
-  const body = pixelSprite(creatureTexture(organism.feature || "none", "down", 0), 0.5, 0.72);
+  const body = pixelSprite(creatureTexture("down", 0), 0.5, 0.72);
+  const held = pixelSprite(atlas.apple);
+  held.position.set(8, -10);
+  held.visible = Boolean(organism.carrying);
   const spinner = pixelSprite(atlas.spinner[0]);
   spinner.position.set(0, -Math.round(CREATURE_H * 0.55));
   spinner.visible = false;
   const container = new Container();
   container.eventMode = "none";
   container.addChild(body);
+  container.addChild(held);
   container.addChild(spinner);
   return {
     container,
     body,
+    held,
     spinner,
     organism,
     dying: false,
@@ -107,18 +170,21 @@ function createOrganismVisual(organism) {
 
 function pose(organism, now) {
   const facing = facingFromDirection(organism.direction ?? 0);
-  const walking = organism.last_action === "MOVE";
-  const frame = walking ? Math.floor(now / WALK_FRAME_MS) % 2 : 0;
+  const walking = organism.last_action === "MOVE" || organism.last_action === "ACCEL";
+  const frameMs = organism.last_action === "ACCEL" ? Math.max(80, WALK_FRAME_MS / 2) : WALK_FRAME_MS;
+  const frame = walking ? Math.floor(now / frameMs) % 2 : 0;
   return { facing, frame };
 }
 
 function applyOrganismPose(visual, organism, now) {
   const { facing, frame } = pose(organism, now);
-  visual.body.texture = creatureTexture(organism.feature || "none", facing, frame);
+  visual.body.texture = creatureTexture(facing, frame);
   visual.body.scale.x = facing === "left" ? -1 : 1;
   const size = organism.size || 8;
   const scale = 1.15 + size / 40;
   visual.container.scale.set(scale);
+  visual.held.visible = Boolean(organism.carrying);
+  visual.held.position.set(facing === "left" ? -8 : 8, -10);
   visual.spinner.visible = Boolean(organism.is_thinking);
   if (visual.spinner.visible) {
     const spin = Math.floor(now / SPINNER_FRAME_MS) % 8;
@@ -187,6 +253,16 @@ export function drawTags(layer, organisms, taggedIds) {
     mark.eventMode = "none";
     layer.addChild(mark);
   }
+}
+
+export function drawCache(mark, cache) {
+  mark.clear();
+  if (!cache) {
+    return;
+  }
+  mark.circle(0, 0, 16).stroke({ width: 2, color: Number.parseInt(PALETTE.cacheRing.slice(1), 16) });
+  mark.circle(0, 0, 5).fill(Number.parseInt(PALETTE.cache.slice(1), 16));
+  mark.position.set(cache.x, cache.y);
 }
 
 export function drawSelectRing(ring, organism) {

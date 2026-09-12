@@ -24,11 +24,17 @@ class Organism:
     thinking_ticks_left: int = 0
     thinking_quality: float = 0.0
     born_at_tick: int = 0
+    carrying: object | None = None
+    vx: float = 0.0
+    vy: float = 0.0
+    speed: float = 6.0
+    food_memory: dict | None = None
+    planned_action: str | None = None
+    hunt_streak: int = 0
+    last_reproduced_tick: int | None = None
+    energy_peak: float = 0.0
+    other_parent_id: str | None = None
 
     @property
     def size(self) -> int:
         return self.genome.morphology.size_base
-
-    @property
-    def feature(self) -> str:
-        return self.genome.morphology.feature

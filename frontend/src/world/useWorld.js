@@ -37,6 +37,7 @@ export function useWorld(worldId) {
         status: data.status,
         organisms: data.organisms,
         apples: data.apples,
+        berries: data.berries ?? [],
         events: [],
         stats: {
           tick: data.tick,
@@ -46,7 +47,9 @@ export function useWorld(worldId) {
           births: 0,
           deaths: 0,
           apples: data.apples.length,
+          berries: (data.berries ?? []).length,
         },
+        chronicle: data.chronicle ?? null,
       });
       setLoading(false);
       socket = new WebSocket(`${WS_BASE}/ws/worlds/${worldId}`);

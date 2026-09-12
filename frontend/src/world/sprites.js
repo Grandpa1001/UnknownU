@@ -1,11 +1,16 @@
 import { Sprite, Texture } from "pixi.js";
 import {
   APPLE_SIZE,
+  BERRY_SIZE,
+  BUSH_H,
+  BUSH_W,
   CREATURE_H,
   CREATURE_W,
   FLOWER_PETALS,
   FLOWER_SIZE,
   PALETTE,
+  PILLAR_H,
+  PILLAR_W,
   SPINNER_SIZE,
   TILE_ART,
   TREE_SIZE,
@@ -113,6 +118,30 @@ function paintTree() {
   return node;
 }
 
+function paintPillar() {
+  const { node, ctx } = canvas(PILLAR_W, PILLAR_H);
+  const cx = 18;
+  ellipse(ctx, cx, 66, 14, 4, PALETTE.grassDark);
+  ctx.globalAlpha = 0.4;
+  ellipse(ctx, cx, 66, 16, 5, PALETTE.stoneDark);
+  ctx.globalAlpha = 1;
+  dot(ctx, 6, 62, PALETTE.stoneDark, 24, 6);
+  dot(ctx, 8, 61, PALETTE.stone, 20, 4);
+  dot(ctx, 11, 18, PALETTE.stoneDark, 14, 44);
+  dot(ctx, 12, 16, PALETTE.stone, 12, 46);
+  dot(ctx, 14, 16, PALETTE.stoneLight, 3, 46);
+  dot(ctx, 11, 30, PALETTE.stoneDark, 14, 3);
+  dot(ctx, 11, 46, PALETTE.stoneDark, 14, 2);
+  dot(ctx, 13, 22, PALETTE.moss, 2, 3);
+  dot(ctx, 21, 38, PALETTE.moss, 2, 2);
+  dot(ctx, 15, 52, PALETTE.moss, 3, 2);
+  dot(ctx, 13, 8, PALETTE.stoneDark, 10, 10);
+  dot(ctx, 14, 6, PALETTE.stone, 8, 12);
+  dot(ctx, 16, 6, PALETTE.stoneLight, 3, 8);
+  dot(ctx, 16, 4, PALETTE.stoneLight, 4, 3);
+  return node;
+}
+
 function paintFlower(variant) {
   const { node, ctx } = canvas(FLOWER_SIZE, FLOWER_SIZE);
   const petal = FLOWER_PETALS[variant % FLOWER_PETALS.length];
@@ -142,40 +171,36 @@ function paintApple() {
   return node;
 }
 
+function paintBerry() {
+  const { node, ctx } = canvas(BERRY_SIZE, BERRY_SIZE);
+  ellipse(ctx, 3, 3, 2, 2, PALETTE.berry);
+  dot(ctx, 1, 1, PALETTE.berryLight);
+  return node;
+}
+
+function paintBush() {
+  const { node, ctx } = canvas(BUSH_W, BUSH_H);
+  ellipse(ctx, 18, 24, 16, 4, PALETTE.grassDark);
+  ellipse(ctx, 18, 16, 16, 10, PALETTE.foliage);
+  ellipse(ctx, 9, 18, 9, 8, PALETTE.foliageMid);
+  ellipse(ctx, 27, 18, 9, 8, PALETTE.foliage);
+  ellipse(ctx, 18, 10, 11, 8, PALETTE.foliageMid);
+  ellipse(ctx, 12, 12, 6, 5, PALETTE.foliage);
+  ellipse(ctx, 24, 11, 6, 5, PALETTE.foliage);
+  dot(ctx, 10, 12, PALETTE.berry, 3, 3);
+  dot(ctx, 17, 8, PALETTE.berryLight, 3, 3);
+  dot(ctx, 25, 13, PALETTE.berry, 3, 3);
+  dot(ctx, 14, 17, PALETTE.berryLight, 2, 2);
+  dot(ctx, 22, 18, PALETTE.berry, 2, 2);
+  return node;
+}
+
 function eye(ctx, x, y) {
   dot(ctx, x, y, PALETTE.eyeWhite, 2, 2);
   dot(ctx, x + 1, y + 1, PALETTE.eyeBlack);
 }
 
-function paintFeature(ctx, feature, facing, frame, bob) {
-  if (feature === "antena") {
-    const x = facing === "down" || facing === "up" ? 11 : 16;
-    const tip = frame === 1 ? 1 : 0;
-    dot(ctx, x + tip, 1 + bob, PALETTE.antena, 2, 4);
-    dot(ctx, x + tip, 1 + bob, PALETTE.eyeWhite);
-  } else if (feature === "rogi") {
-    if (facing === "right") {
-      dot(ctx, 4, 8 + bob, PALETTE.horn, 3, 3);
-      dot(ctx, 19, 8 + bob, PALETTE.horn, 3, 3);
-    } else {
-      dot(ctx, 5, 6 + bob, PALETTE.horn, 3, 3);
-      dot(ctx, 16, 6 + bob, PALETTE.horn, 3, 3);
-    }
-  } else if (feature === "guzki") {
-    const fade = frame === 1 ? PALETTE.creatureLight : PALETTE.bump;
-    dot(ctx, 7, 14 + bob, fade, 2, 2);
-    dot(ctx, 12, 17 + bob, fade, 2, 2);
-    dot(ctx, 16, 13 + bob, fade, 2, 2);
-  } else if (feature === "skrzydła") {
-    const lift = frame === 1 ? -2 : 0;
-    const x1 = facing === "right" ? 1 : 3;
-    const x2 = facing === "right" ? 21 : 19;
-    dot(ctx, x1, 12 + bob + lift, PALETTE.wing, 2, 7);
-    dot(ctx, x2, 12 + bob + lift, PALETTE.wing, 2, 7);
-  }
-}
-
-function paintCreature(facing, frame, feature) {
+function paintCreature(facing, frame) {
   const { node, ctx } = canvas(CREATURE_W, CREATURE_H);
   const bob = frame === 1 ? -1 : 0;
   const cx = 12;
@@ -195,18 +220,14 @@ function paintCreature(facing, frame, feature) {
     eye(ctx, 17, 10 + bob);
   }
 
-  paintFeature(ctx, feature, facing, frame, bob);
-
   const spread = frame === 1 ? 2 : 0;
-  const legColor = feature === "nogi" ? PALETTE.leg : PALETTE.creatureDark;
-  const legH = feature === "nogi" ? 4 : 3;
   const legY = 26 + bob;
   if (facing === "right") {
-    dot(ctx, 9, legY, legColor, 2, legH);
-    dot(ctx, 15 + spread, legY, legColor, 2, legH);
+    dot(ctx, 9, legY, PALETTE.creatureDark, 2, 3);
+    dot(ctx, 15 + spread, legY, PALETTE.creatureDark, 2, 3);
   } else {
-    dot(ctx, 8 - spread, legY, legColor, 2, legH);
-    dot(ctx, 14 + spread, legY, legColor, 2, legH);
+    dot(ctx, 8 - spread, legY, PALETTE.creatureDark, 2, 3);
+    dot(ctx, 14 + spread, legY, PALETTE.creatureDark, 2, 3);
   }
   return node;
 }
@@ -228,22 +249,19 @@ function buildAtlas() {
   for (const kind of ["grass", "dirt", "meadow", "hills"]) {
     terrain[kind] = [0, 1, 2, 3].map((variant) => paintTile(kind, variant));
   }
-  const features = ["none", "antena", "rogi", "nogi", "guzki", "skrzydła"];
   const facings = ["down", "up", "right"];
   const creatures = {};
-  for (const feature of features) {
-    creatures[feature] = {};
-    for (const facing of facings) {
-      creatures[feature][facing] = [0, 1].map((frame) =>
-        textureFrom(paintCreature(facing, frame, feature)),
-      );
-    }
+  for (const facing of facings) {
+    creatures[facing] = [0, 1].map((frame) => textureFrom(paintCreature(facing, frame)));
   }
   return {
     terrain,
     tree: textureFrom(paintTree()),
+    pillar: textureFrom(paintPillar()),
     flowers: [0, 1, 2].map((variant) => textureFrom(paintFlower(variant))),
     apple: textureFrom(paintApple()),
+    berry: textureFrom(paintBerry()),
+    bush: textureFrom(paintBush()),
     spinner: [0, 1, 2, 3, 4, 5, 6, 7].map((frame) => textureFrom(paintSpinner(frame))),
     creatures,
   };
@@ -271,9 +289,9 @@ export function facingFromDirection(radians) {
   return "up";
 }
 
-export function creatureTexture(feature, facing, frame) {
+export function creatureTexture(facing, frame) {
   const key = facing === "left" ? "right" : facing;
-  const bank = getAtlas().creatures[feature] ?? getAtlas().creatures.none;
+  const bank = getAtlas().creatures;
   return bank[key][frame] ?? bank[key][0];
 }
 

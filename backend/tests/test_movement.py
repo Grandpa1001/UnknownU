@@ -1,7 +1,7 @@
 import math
 
-from app.simulation.actions import move, sense, torus_offset, wrap
-from app.simulation.constants import MOVE_COST, SENSE_RADIUS
+from app.simulation.actions import accelerate, execute_program, move, sense, torus_offset, wrap
+from app.simulation.constants import ACCEL_AMOUNT, MOVE_COST, MOVE_STEP, SENSE_RADIUS
 from app.simulation.environment import Apple, Tree
 from app.simulation.genome import Genome, Morphology, Traits
 from app.simulation.organism import Organism
@@ -17,7 +17,7 @@ def _genome() -> Genome:
             hunger_threshold=0.4,
             reproduction_threshold=0.8,
         ),
-        morphology=Morphology(size_base=8, feature="none", has_benefit=False),
+        morphology=Morphology(size_base=8),
     )
 
 
@@ -64,6 +64,7 @@ def test_sense_finds_nearby_apple() -> None:
             apples=[Apple(id="apple_1_1", tree_id="tree_1", x=80.0, y=50.0)],
         )
     ]
+    world.bushes = []
     perception = sense(organism, world)
     assert perception.food
     assert perception.food[0].id == "apple_1_1"
@@ -80,13 +81,78 @@ def test_sense_ignores_apple_outside_radius() -> None:
     world.trees = [
         Tree(
             id="tree_1",
-            x=300.0,
-            y=300.0,
-            apples=[Apple(id="apple_far", tree_id="tree_1", x=300.0, y=300.0)],
+            x=200.0,
+            y=200.0,
+            apples=[Apple(id="apple_far", tree_id="tree_1", x=200.0, y=200.0)],
         )
     ]
+    world.bushes = []
     perception = sense(organism, world)
     assert perception.food == []
+
+
+def test_sense_reaches_farther_apples() -> None:
+    world = World(seed=1, width=400, height=400, initial_organisms=1)
+    organism = world.organisms[0]
+    organism.x = 50.0
+    organism.y = 50.0
+    organism.energy = 500.0
+    world.trees = [
+        Tree(
+            id="tree_1",
+            x=250.0,
+            y=50.0,
+            apples=[Apple(id="apple_mid", tree_id="tree_1", x=250.0, y=50.0)],
+        )
+    ]
+    world.bushes = []
+    perception = sense(organism, world)
+    assert perception.food
+    assert perception.food[0].id == "apple_mid"
+    assert perception.food[0].distance < SENSE_RADIUS
+
+
+def test_accelerate_increases_speed_and_move_cost() -> None:
+    world = World(seed=1, width=400, height=400, initial_organisms=1)
+    organism = world.organisms[0]
+    organism.x = 100.0
+    organism.y = 100.0
+    organism.direction = 0.0
+    organism.energy = 500.0
+    organism.speed = MOVE_STEP
+    accelerate(organism)
+    assert organism.speed == MOVE_STEP + ACCEL_AMOUNT
+    move(organism, world)
+    assert organism.x > 100.0
+    assert organism.energy == 500.0 - MOVE_COST * (organism.speed / MOVE_STEP)
+    assert organism.last_action == "ACCEL"
+
+
+def test_food_memory_keeps_hunting_when_apple_leaves_sight() -> None:
+    world = World(seed=1, width=400, height=400, initial_organisms=1)
+    organism = world.organisms[0]
+    organism.x = 50.0
+    organism.y = 50.0
+    organism.direction = 0.0
+    organism.energy = 400.0
+    organism.genome = Genome(
+        traits=Traits(
+            bravery=1.0,
+            stress=0.0,
+            stupidity=0.0,
+            hunger_threshold=0.4,
+            reproduction_threshold=0.9,
+        ),
+        program=organism.genome.program,
+        morphology=organism.genome.morphology,
+    )
+    organism.food_memory = {"id": "remembered", "x": 180.0, "y": 50.0, "tick": world.current_tick}
+    world.trees = []
+    world.ground_apples = []
+    world.bushes = []
+    execute_program(organism, world)
+    assert organism.last_action in {"MOVE", "ACCEL"}
+    assert organism.x > 50.0
 
 
 def test_organisms_move_on_their_own() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 
 from app.persistence.database import connect, load_world, save_world
+from app.simulation.chronicle import dump_chronicle
 from app.simulation.constants import SNAPSHOT_INTERVAL
 from app.simulation.world import World
 
@@ -37,7 +38,7 @@ def dump_world(world: World) -> str:
     for organism in world.organisms:
         lines.append(
             f"{organism.id} pos=({organism.x:.0f}, {organism.y:.0f}) "
-            f"energy={organism.energy:.0f} feature={organism.feature} "
+            f"energy={organism.energy:.0f} size={organism.size} "
             f"age={organism.age} gen={organism.generation} "
             f"action={organism.last_action or '-'}"
         )
@@ -93,6 +94,8 @@ def run(argv: list[str] | None = None) -> int:
             break
     if args.do_print:
         print(dump_world(world))
+        if world.status != "running":
+            print(dump_chronicle(world))
     if args.print_memory:
         print(dump_memory(world, args.print_memory))
         if world.status == "extinct":

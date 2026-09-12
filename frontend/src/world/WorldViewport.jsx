@@ -3,13 +3,17 @@ import { Application, Container, Graphics } from "pixi.js";
 import { attachCamera, focusOn, lerpToward } from "./camera.js";
 import { CANVAS_BG } from "./config.js";
 import {
+  drawCache,
   drawSelectRing,
   drawTags,
   hitOrganism,
+  makeBushes,
   makeFlowers,
+  makePillar,
   makeTerrainSprite,
   makeTrees,
   syncApples,
+  syncBerries,
   syncOrganisms,
   tickOrganisms,
 } from "./layers.js";
@@ -43,6 +47,7 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
     let detachCamera = () => {};
     const organismSprites = new Map();
     const appleSprites = new Map();
+    const berrySprites = new Map();
 
     async function boot() {
       const instance = new Application();
@@ -77,9 +82,17 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
       world.eventMode = "passive";
       world.addChild(makeTerrainSprite(snapshot));
       world.addChild(makeFlowers(snapshot.flowers));
+      world.addChild(makeBushes(snapshot.bushes));
       world.addChild(makeTrees(snapshot.trees));
+      if (snapshot.pillar) {
+        world.addChild(makePillar(snapshot.pillar));
+      }
       const applesLayer = new Container();
       applesLayer.eventMode = "none";
+      const berriesLayer = new Container();
+      berriesLayer.eventMode = "none";
+      const cacheMark = new Graphics();
+      cacheMark.eventMode = "none";
       const organismsLayer = new Container();
       organismsLayer.eventMode = "passive";
       const ring = new Graphics();
@@ -87,6 +100,8 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
       const tagsLayer = new Container();
       tagsLayer.eventMode = "none";
       world.addChild(applesLayer);
+      world.addChild(berriesLayer);
+      world.addChild(cacheMark);
       world.addChild(organismsLayer);
       world.addChild(ring);
       world.addChild(tagsLayer);
@@ -96,8 +111,12 @@ export default function WorldViewport({ snapshot, live, selectedId, taggedIds, f
         const now = performance.now();
         const organisms = state?.organisms ?? snapshot.organisms;
         const apples = state?.apples ?? snapshot.apples;
+        const berries = state?.berries ?? snapshot.berries;
+        const cache = state?.cache ?? snapshot.cache;
         syncOrganisms(organismsLayer, organismSprites, organisms, now);
         syncApples(applesLayer, appleSprites, apples);
+        syncBerries(berriesLayer, berrySprites, berries);
+        drawCache(cacheMark, cache);
         drawTags(tagsLayer, organisms, taggedRef.current);
         const selected = organisms.find((item) => item.id === selectedRef.current);
         drawSelectRing(ring, selected);
